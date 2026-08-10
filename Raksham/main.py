@@ -237,7 +237,7 @@ async def retrieve_profile_data(data: dict):
     if user:
         user_id = user[0]
         # CHANGE TO YOUR AWS AMPLIFY DOMAIN ONCE DEPLOYED
-        profile_url = f"https://your-amplify-app.amplifyapp.com/index.html?id={user_id}"
+        profile_url = f"https://raksham-pi.vercel.app/index.html?id={user_id}"
         qr = qrcode.QRCode(version=2, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
         qr.add_data(profile_url)
         qr.make(fit=True)
