@@ -277,6 +277,26 @@ async function saveProfile() {
         em5: document.getElementById('e-em5').value,
         em6: document.getElementById('e-em6').value
     };
+    try {
+        let response = await fetch(`${API_BASE_URL}/update_profile`, {
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        let data = await response.json();
+        if (data.error) {
+            alert(data.error);
+        } else {
+            // FIX: Save payload.email instead of data.new_email
+            localStorage.setItem('raksham_user_email', payload.email);
+            closeMenu();
+            await loadProfileData();
+            alert("Details updated and new QR code generated successfully.");
+        }
+    } catch (error) {
+        alert("Error updating profile details.");
+    }
+}
 
     try {
         let response = await fetch(`${API_BASE_URL}/update_profile`, {
