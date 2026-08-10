@@ -1,9 +1,10 @@
-//GLOBAL VARIABLES
+// GLOBAL VARIABLES
 let countdownTimer;
 let timeLeft = 10;
 let isEditMode = false;
 let dispatchedServices = {}; // Stores hospital/police data for the AI
-//UPDATE TO AWS EC2 IP ONCE DEPLOYED (e.g., 'http://18.22.45.6:8000')
+
+// Render Backend API URL
 const API_BASE_URL = 'https://raksham-backend.onrender.com';
 
 window.onload = async () => {
@@ -17,16 +18,17 @@ window.onload = async () => {
             publicProfileName.innerText = "Scan a valid QR code.";
         }
     }
+
     const viewEmailField = document.getElementById('v-email');
     if (viewEmailField) {
         await loadProfileData();
     }
 };
+
 async function loadUserProfile(userId) {
     try {
         let response = await fetch(`${API_BASE_URL}/profile/${userId}`);
         let data = await response.json();
-
         if (data.error) {
             document.getElementById('profile-name').innerText = "User not found";
             return;
@@ -46,20 +48,20 @@ async function loadUserProfile(userId) {
         document.getElementById('profile-name').innerText = "Connection Error";
     }
 }
+
 function startCountdown() {
     document.getElementById('main-screen').classList.add('hidden');
     document.getElementById('countdown-screen').classList.remove('hidden');
-
     countdownTimer = setInterval(() => {
         timeLeft--;
         document.getElementById('timer-display').innerText = timeLeft;
-
         if (timeLeft <= 0) {
             clearInterval(countdownTimer);
             triggerBackendAlert();
         }
     }, 1000);
 }
+
 function cancelEmergency() {
     clearInterval(countdownTimer);
     timeLeft = 10;
@@ -67,13 +69,12 @@ function cancelEmergency() {
     document.getElementById('countdown-screen').classList.add('hidden');
     document.getElementById('main-screen').classList.remove('hidden');
 }
+
 async function triggerBackendAlert() {
     document.getElementById('countdown-screen').classList.add('hidden');
     document.getElementById('triage-screen').classList.remove('hidden');
-
     const urlParams = new URLSearchParams(window.location.search);
     const userId = urlParams.get('id');
-
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -91,6 +92,7 @@ async function triggerBackendAlert() {
         sendEmergencyPayload({ user_id: userId });
     }
 }
+
 async function sendEmergencyPayload(payload) {
     try {
         let response = await fetch(`${API_BASE_URL}/trigger_emergency`, {
@@ -99,7 +101,6 @@ async function sendEmergencyPayload(payload) {
             body: JSON.stringify(payload)
         });
         let data = await response.json();
-        // Capture the services so the AI knows who is responding
         if (data.services) {
             dispatchedServices = data.services;
         }
@@ -107,6 +108,7 @@ async function sendEmergencyPayload(payload) {
         console.log("Backend not connected yet.");
     }
 }
+
 async function sendTriage(type) {
     document.getElementById('triage-screen').classList.add('hidden');
     document.getElementById('guidance-screen').classList.remove('hidden');
@@ -117,10 +119,9 @@ async function sendTriage(type) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 type: type, 
-                services: dispatchedServices // Feeding context to the AI
+                services: dispatchedServices
             })
         });
-
         let data = await response.json();
         
         if (Array.isArray(data.suggestions)) {
@@ -133,7 +134,7 @@ async function sendTriage(type) {
     }
 }
 
-//REGISTER.HTML LOGIC
+// REGISTER.HTML LOGIC
 async function registerUser() {
     const userData = {
         email: document.getElementById('email').value,
@@ -150,7 +151,6 @@ async function registerUser() {
         em5: document.getElementById('em5').value,
         em6: document.getElementById('em6').value
     };
-
     try {
         let response = await fetch(`${API_BASE_URL}/register`, {
             method: 'POST',
@@ -158,7 +158,6 @@ async function registerUser() {
             body: JSON.stringify(userData)
         });
         let data = await response.json();
-
         if (data.error) {
             alert(data.error);
         } else {
@@ -170,25 +169,21 @@ async function registerUser() {
     }
 }
 
-//LOGIN.HTML LOGIC
+// LOGIN.HTML LOGIC
 async function attemptLogin() {
     const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-password').value;
-
     if (!email || !password) {
         alert("Enter your email and password.");
         return;
     }
-
     try {
         let response = await fetch(`${API_BASE_URL}/login`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({email: email, password: password})
         });
-
         let data = await response.json();
-
         if (data.error) {
             alert(data.error);
         } else {
@@ -200,18 +195,20 @@ async function attemptLogin() {
     }
 }
 
-//PROFILE.HTML LOGIC
+// PROFILE.HTML LOGIC
 async function loadProfileData() {
     const userEmail = localStorage.getItem('raksham_user_email');
-    if (!userEmail) { window.location.href = 'login.html'; return; }
-
+    if (!userEmail) { 
+        window.location.href = 'login.html'; 
+        return; 
+    }
     try {
         let response = await fetch(`${API_BASE_URL}/retrieve_profile_data`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({email: userEmail})
         });
         let data = await response.json();
-
         if (data.error) {
             alert("Error loading data.");
         } else {
@@ -229,23 +226,27 @@ async function loadProfileData() {
             document.getElementById('v-em5').innerText = u.em5;
             document.getElementById('v-em6').innerText = u.em6;
 
-            document.getElementById('e-email').value = u.email;
-            document.getElementById('e-name').value = u.name;
-            document.getElementById('e-blood').value = u.blood_group;
-            document.getElementById('e-allergies').value = u.allergies;
-            document.getElementById('e-cond').value = u.conditions;
-            document.getElementById('e-phone').value = u.phone;
-            document.getElementById('e-em1').value = u.em1;
-            document.getElementById('e-em2').value = u.em2;
-            document.getElementById('e-em3').value = u.em3;
-            document.getElementById('e-em4').value = u.em4;
-            document.getElementById('e-em5').value = u.em5;
-            document.getElementById('e-em6').value = u.em6;
+            if (document.getElementById('e-email')) {
+                document.getElementById('e-email').value = u.email;
+                document.getElementById('e-name').value = u.name;
+                document.getElementById('e-blood').value = u.blood_group;
+                document.getElementById('e-allergies').value = u.allergies;
+                document.getElementById('e-cond').value = u.conditions;
+                document.getElementById('e-phone').value = u.phone;
+                document.getElementById('e-em1').value = u.em1;
+                document.getElementById('e-em2').value = u.em2;
+                document.getElementById('e-em3').value = u.em3;
+                document.getElementById('e-em4').value = u.em4;
+                document.getElementById('e-em5').value = u.em5;
+                document.getElementById('e-em6').value = u.em6;
+            }
 
-            document.getElementById('qr-image').src = data.qr_image;
-            document.getElementById('qr-image').style.display = "block";
-            document.getElementById('download-link').href = data.qr_image;
-            document.getElementById('download-btn').style.display = "inline-block";
+            if (document.getElementById('qr-image')) {
+                document.getElementById('qr-image').src = data.qr_image;
+                document.getElementById('qr-image').style.display = "block";
+                document.getElementById('download-link').href = data.qr_image;
+                document.getElementById('download-btn').style.display = "inline-block";
+            }
         }
     } catch (error) {
         console.error("Error retrieving profile data:", error);
@@ -287,7 +288,6 @@ async function saveProfile() {
         if (data.error) {
             alert(data.error);
         } else {
-            // FIX: Save payload.email instead of data.new_email
             localStorage.setItem('raksham_user_email', payload.email);
             closeMenu();
             await loadProfileData();
@@ -298,25 +298,6 @@ async function saveProfile() {
     }
 }
 
-    try {
-        let response = await fetch(`${API_BASE_URL}/update_profile`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-        let data = await response.json();
-
-        if (data.error) {
-            alert(data.error);
-        } else {
-            localStorage.setItem('raksham_user_email', data.new_email);
-            closeMenu();
-            await loadProfileData();
-            alert("Details updated and new QR code generated successfully.");
-        }
-    } catch (error) {
-        alert("Error updating profile details.");
-    }
-}
 function logout() {
     localStorage.removeItem('raksham_user_email');
     window.location.href = 'login.html';
