@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raksham - Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="app-header"><span>RAKSHAM</span></div>
+        <h2 class="heavy-title">Access Your Tag</h2>
+        
+        <div class="data-box">
+            <input type="email" id="login-email" placeholder="Registered Email Address" required>
+            <input type="password" id="login-password" placeholder="Password" required>
+            <button class="btn btn-neon" onclick="attemptLogin()">LOGIN TO PROFILE</button>
+            
+            <hr style="margin: 25px 0; border: 1px solid #f0f0f0;">
+            
+            <p style="text-align: center; font-size: 14px; font-weight: 700; color: #888;">OR</p>
+            <button class="btn btn-dark" onclick="window.location.href='register.html'">REGISTER NEW TAG</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

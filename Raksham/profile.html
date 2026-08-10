@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raksham - My Profile</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <button class="menu-btn" onclick="openMenu()">&#9776;</button>
+
+    <div class="container">
+        <div class="app-header"><span>RAKSHAM</span></div>
+        
+        <div class="data-box" id="dashboard-content" style="text-align: center; position: relative;">
+            <h2 class="heavy-title">MY EMERGENCY TAG</h2>
+            
+            <div id="view-mode" class="grid-layout">
+                <p><strong>Email:</strong> <span id="v-email"></span></p>
+                <p><strong>Name:</strong> <span id="v-name"></span></p>
+                <p><strong>Blood Group:</strong> <span id="v-blood"></span></p>
+                <p><strong>Allergies:</strong> <span id="v-allergies"></span></p>
+                <p><strong>Conditions:</strong> <span id="v-cond"></span></p>
+                <p><strong>Primary Phone:</strong> <span id="v-phone"></span></p>
+                <p><strong>Emergency Contacts:</strong><br>
+                    1: <span id="v-em1"></span><br>
+                    2: <span id="v-em2"></span><br>
+                    3: <span id="v-em3"></span><br>
+                    4: <span id="v-em4"></span><br>
+                    5: <span id="v-em5"></span><br>
+                    6: <span id="v-em6"></span>
+                </p>
+            </div>
+
+            <hr style="margin: 25px 0;">
+            
+            <img id="qr-image" src="" alt="Your Emergency QR Code" style="width: 250px; border: 5px solid #111111; border-radius: 10px; display: none; margin: 0 auto;">
+            <br>
+            <a id="download-link" href="" download="Raksham_Emergency_QR.png">
+                <button class="btn btn-neon" id="download-btn" style="margin-top: 20px; width: 250px; display: none;">DOWNLOAD TAG</button>
+            </a>
+            
+            <button class="btn btn-dark" onclick="logout()" style="margin-top: 30px; width: 250px;">LOGOUT</button>
+        </div>
+    </div>
+
+    <div id="edit-menu" class="edit-menu-overlay">
+        <button class="close-btn" onclick="closeMenu()">&times;</button>
+        <div class="app-header" style="margin-top: 40px;"><span>RAKSHAM</span></div>
+        <h2 class="heavy-title" style="color:#FF003C;">Update Tag Details</h2>
+        
+        <div class="data-box" style="margin-bottom: 50px;">
+            <input type="email" id="e-email" placeholder="Email">
+            <input type="text" id="e-name" placeholder="Name">
+            <input type="text" id="e-blood" placeholder="Blood Group">
+            <input type="text" id="e-allergies" placeholder="Allergies">
+            <input type="text" id="e-cond" placeholder="Conditions">
+            <input type="tel" id="e-phone" placeholder="Primary Phone">
+            <input type="tel" id="e-em1" placeholder="Em Contact 1">
+            <input type="tel" id="e-em2" placeholder="Em Contact 2">
+            <input type="tel" id="e-em3" placeholder="Em Contact 3">
+            <input type="tel" id="e-em4" placeholder="Em Contact 4">
+            <input type="tel" id="e-em5" placeholder="Em Contact 5">
+            <input type="tel" id="e-em6" placeholder="Em Contact 6">
+            
+            <button class="btn btn-neon" onclick="saveProfile()" style="margin-top: 20px;">GENERATE NEW TAG</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

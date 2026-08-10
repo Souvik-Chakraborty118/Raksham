@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raksham - Register Profile</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="app-header"><span>RAKSHAM</span></div>
+        <h2 class="heavy-title">Create Tag</h2>
+        
+        <div id="registration-form" class="data-box">
+            <h3 style="color: #FF003C;">Account Details</h3>
+            <input type="email" id="email" placeholder="Email Address" required>
+            <input type="password" id="password" placeholder="Create Password" required>
+            
+            <h3 style="color: #FF003C;">Medical Info</h3>
+            <input type="text" id="name" placeholder="Full Name" required>
+            <input type="text" id="blood" placeholder="Blood Group (e.g., O+)" required>
+            <input type="text" id="allergies" placeholder="Severe Allergies (or 'None')">
+            <input type="text" id="conditions" placeholder="Medical Conditions (or 'None')">
+            
+            <h3 style="color: #FF003C;">Emergency Contacts</h3>
+            <input type="tel" id="phone" placeholder="Your Primary Phone Number" required>
+            <input type="tel" id="em1" placeholder="Emergency Contact 1" required>
+            <input type="tel" id="em2" placeholder="Emergency Contact 2">
+            <input type="tel" id="em3" placeholder="Emergency Contact 3">
+            <input type="tel" id="em4" placeholder="Emergency Contact 4">
+            <input type="tel" id="em5" placeholder="Emergency Contact 5">
+            <input type="tel" id="em6" placeholder="Emergency Contact 6">
+            
+            <button class="btn btn-neon" onclick="registerUser()">GENERATE NEW TAG</button>
+            
+            <div style="margin-top: 25px; text-align: center;">
+                <p style="font-size: 14px; font-weight: 700;">Already have a tag?</p>
+                <button class="btn btn-dark" onclick="window.location.href='login.html'">GO TO LOGIN</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

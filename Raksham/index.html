@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raksham - Emergency Medical Tag</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="app-header"><span>RAKSHAM</span></div>
+        <div id="main-screen">
+            <div class="data-box">
+                <h2>Medical Profile</h2>
+                <p><strong>Name:</strong> <span id="profile-name">Loading...</span></p>
+                <p><strong>Blood Group:</strong> <span id="profile-blood">Loading...</span></p>
+                <p><strong>Allergies:</strong> <span id="profile-allergies">Loading...</span></p>
+                <p><strong>Conditions:</strong> <span id="profile-conditions">Loading...</span></p>
+                
+                <h2 style="margin-top: 20px;">Contact Info</h2>
+                <p><strong>Primary:</strong> <span id="profile-phone">Loading...</span></p>
+                <p><strong>Emergency 1:</strong> <span id="profile-em1"></span></p>
+                <p><strong>Emergency 2:</strong> <span id="profile-em2"></span></p>
+                <p><strong>Emergency 3:</strong> <span id="profile-em3"></span></p>
+                <p><strong>Emergency 4:</strong> <span id="profile-em4"></span></p>
+                <p><strong>Emergency 5:</strong> <span id="profile-em5"></span></p>
+                <p><strong>Emergency 6:</strong> <span id="profile-em6"></span></p>
+            </div>
+            <button class="btn btn-neon" onclick="startCountdown()">REPORT EMERGENCY</button>
+        </div>
+        
+        <div id="countdown-screen" class="hidden">
+            <h2 class="heavy-title">ALERTING HOSPITAL IN:</h2>
+            <div class="timer" id="timer-display">10</div>
+            <p class="warning">WARNING: Prank alerts are traced by IP Address.</p>
+            <button class="btn btn-dark" onclick="cancelEmergency()">CANCEL ALARM</button>
+        </div>
+        
+        <div id="triage-screen" class="hidden">
+            <h2 class="heavy-title red-text">EMERGENCY TRIGGERED</h2>
+            <p class="subtitle">Select the situation below to get immediate first-aid instructions:</p>
+            <button class="btn btn-dark" onclick="sendTriage('Car Crash')">CAR CRASH</button>
+            <button class="btn btn-dark" onclick="sendTriage('Physical Assault')">PHYSICAL ASSAULT</button>
+        </div>
+        
+        <div id="guidance-screen" class="hidden">
+            <h2 class="heavy-title">IMMEDIATE ACTIONS</h2>
+            <div class="data-box red-text bold-text" id="ai-suggestions"></div>
+            <p class="subtitle">Ambulance dispatched. Stay with the victim.</p>
+        </div>
+        <div class="footer">Developed by <span>Team Raksham</span></div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

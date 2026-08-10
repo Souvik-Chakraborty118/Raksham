@@ -1,0 +1,310 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap');
+
+body {
+    font-family: 'Poppins', sans-serif;
+    text-align: center;
+    padding: 20px;
+    /* Animated Dot-Matrix Background */
+    background-color: #FAFAFA;
+    background-image: radial-gradient(#FF003C 0.5px, transparent 0.5px), radial-gradient(#FF003C 0.5px, #FAFAFA 0.5px);
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    /* Softens the dots so they aren't distracting */
+    background-blend-mode: multiply;
+    opacity: 0.95; 
+    
+    color: #111111;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* --- ANIMATIONS --- */
+@keyframes slideUpFade {
+    0% { opacity: 0; transform: translateY(40px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes neonFlicker {
+    0%, 18%, 22%, 25%, 53%, 57%, 100% {
+        text-shadow: 0 2px 10px rgba(255, 0, 60, 0.4), 0 0 20px rgba(255, 0, 60, 0.2);
+        color: #FF003C;
+    }
+    20%, 24%, 55% {
+        text-shadow: none;
+        color: #aa0028; /* Dimmed state */
+    }
+}
+
+@keyframes heartbeatPulse {
+    0% { transform: scale(1); text-shadow: 0 0 15px rgba(255, 0, 60, 0.5); }
+    14% { transform: scale(1.1); text-shadow: 0 0 30px rgba(255, 0, 60, 0.8); }
+    28% { transform: scale(1); text-shadow: 0 0 15px rgba(255, 0, 60, 0.5); }
+    42% { transform: scale(1.1); text-shadow: 0 0 30px rgba(255, 0, 60, 0.8); }
+    70%, 100% { transform: scale(1); text-shadow: 0 0 15px rgba(255, 0, 60, 0.5); }
+}
+
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-5px); }
+    100% { transform: translateY(0px); }
+}
+
+/* Page Load Animation */
+.container {
+    width: 100%;
+    max-width: 400px;
+    flex: 1;
+    animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Neon Red Glow & Flicker for App Name */
+.app-header {
+    font-size: 2.5rem;
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 25px;
+    margin-top: 10px;
+}
+
+.app-header span {
+    color: #FF003C;
+    animation: neonFlicker 4s infinite alternate; /* Applies the flicker */
+}
+
+/* Clean White Containers with Floating Motion */
+.data-box {
+    background: rgba(255, 255, 255, 0.95); 
+    backdrop-filter: blur(10px); /* Glassmorphism effect */
+    padding: 25px;
+    border-radius: 16px;
+    margin-bottom: 30px;
+    box-shadow: 0 15px 35px rgba(255, 0, 60, 0.08), 0 5px 15px rgba(0, 0, 0, 0.05);
+    border: 2px solid rgba(255, 0, 60, 0.15);
+    text-align: left;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.data-box:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 20px 40px rgba(255, 0, 60, 0.12), 0 8px 20px rgba(0, 0, 0, 0.08);
+    border: 2px solid rgba(255, 0, 60, 0.4);
+}
+
+.data-box h2, .data-box h3 {
+    margin-top: 0;
+    font-size: 1.4rem;
+    color: #FF003C;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 0 0 8px rgba(255, 0, 60, 0.2);
+}
+
+.data-box p {
+    font-size: 1.1rem;
+    margin: 10px 0;
+    color: #444; 
+}
+
+.data-box span {
+    font-weight: 700;
+    color: #000;
+}
+
+/* Global Buttons */
+.btn {
+    position: relative;
+    padding: 18px 30px;
+    font-size: 18px;
+    font-weight: 900;
+    border: none;
+    border-radius: 12px; 
+    cursor: pointer;
+    margin: 10px 0;
+    width: 100%;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    overflow: hidden; /* Needed for the light sweep */
+    z-index: 1;
+}
+
+/* Light Sweep Hover Effect on Buttons */
+.btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 100%);
+    transform: skewX(-25deg);
+    transition: all 0.6s ease;
+    z-index: -1;
+}
+
+.btn:hover::after {
+    left: 150%;
+}
+/* Red Neon Glowing Button */
+.btn-neon {
+    background-color: #FF003C;
+    color: #FFFFFF;
+    box-shadow: 0 8px 20px rgba(255, 0, 60, 0.3), inset 0 -3px 0 rgba(0,0,0,0.2);
+    border: 2px solid #FF003C;
+}
+.btn-neon:hover {
+    background-color: #e60036;
+    box-shadow: 0 12px 25px rgba(255, 0, 60, 0.5), inset 0 -3px 0 rgba(0,0,0,0.2);
+    transform: translateY(-2px);
+}
+.btn-neon:active {
+    transform: scale(0.96) translateY(2px);
+    box-shadow: 0 2px 10px rgba(255, 0, 60, 0.4);
+}
+/* Secondary Button (White/Red theme) */
+.btn-dark {
+    background-color: #FFFFFF;
+    color: #FF003C;
+    border: 2px solid #FF003C;
+    box-shadow: 0 4px 10px rgba(255, 0, 60, 0.1);
+}
+
+.btn-dark:hover {
+    background-color: #FFF0F3; 
+    box-shadow: 0 8px 20px rgba(255, 0, 60, 0.25);
+    transform: translateY(-2px);
+}
+
+.btn-dark:active {
+    transform: scale(0.96) translateY(2px);
+}
+/* Utility Classes */
+.hidden { display: none !important; }
+.heavy-title { 
+    font-weight: 900; 
+    color: #FF003C;
+    text-shadow: 0 0 12px rgba(255, 0, 60, 0.3);
+}
+.red-text { color: #FF003C; }
+.bold-text { font-weight: 900; font-size: 1.2rem; }
+.subtitle { font-weight: 700; font-size: 1.1rem; color: #555; }
+
+/* The Countdown Timer - Heartbeat Animation */
+.timer {
+    font-size: 90px;
+    font-weight: 900;
+    color: #FF003C;
+    margin: 20px 0;
+    line-height: 1;
+    animation: heartbeatPulse 1.5s infinite; /* Adds the heartbeat effect */
+}
+.warning { 
+    color: #FF003C; 
+    font-size: 14px; 
+    margin-top: 15px; 
+    font-weight: 700; 
+    animation: float 3s ease-in-out infinite;
+}
+.footer {
+    margin-top: auto;
+    padding-top: 30px;
+    padding-bottom: 10px;
+    font-size: 12px;
+    color: #888888;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+.footer span {
+    color: #FF003C;
+    font-weight: 900;
+}
+/* Profile Page & Form Inputs */
+.data-box input {
+    width: 90%;
+    padding: 14px;
+    margin: 8px 0;
+    background-color: #F4F4F4;
+    color: #111;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    transition: all 0.3s ease;
+}
+.data-box input::placeholder {
+    color: #999;
+    font-weight: 400;
+}
+.data-box input:focus {
+    outline: none;
+    background-color: #FFFFFF;
+    border: 2px solid #FF003C;
+    box-shadow: 0 0 15px rgba(255, 0, 60, 0.2);
+    transform: scale(1.02); /* Slight pop-out when typing */
+}
+.grid-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+    text-align: left;
+}
+/* Top-Left Hamburger Menu Button */
+.menu-btn {
+    position: absolute;
+    top: 25px;
+    left: 25px;
+    font-size: 32px;
+    background: none;
+    border: none;
+    color: #FF003C;
+    cursor: pointer;
+    z-index: 1000;
+    transition: transform 0.3s ease;
+}
+.menu-btn:hover {
+    transform: scale(1.15) rotate(5deg);
+}
+/* Full-Screen Edit Profile Overlay */
+.edit-menu-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.95); 
+    backdrop-filter: blur(12px);
+    z-index: 2000;
+    padding: 20px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    text-align: center;
+    animation: slideUpFade 0.4s ease forwards; /* Menu slides up smoothly */
+}
+/* Close (X) Button for Overlay */
+.close-btn {
+    position: absolute;
+    top: 15px;
+    right: 25px;
+    font-size: 40px;
+    background: none;
+    border: none;
+    color: #FF003C;
+    cursor: pointer;
+    font-weight: 900;
+    transition: transform 0.3s ease;
+}
+
+.close-btn:hover {
+    transform: rotate(90deg) scale(1.1);
+}
+
+hr {
+    border: 1px solid rgba(255, 0, 60, 0.15);
+}
