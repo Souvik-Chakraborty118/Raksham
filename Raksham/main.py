@@ -12,18 +12,22 @@ import hashlib
 from dotenv import load_dotenv
 import joblib
 import numpy as np
-#AWS Database Imports
+
+# AWS Database Imports
 import psycopg2
 from psycopg2 import IntegrityError
+
 load_dotenv()
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-#LOAD ML MODEL
+
+# --- LOAD ML MODEL ---
 MODEL_PATH = "models/multilingual_rf_model.pkl"
 try:
     ai_model = joblib.load(MODEL_PATH)
@@ -31,7 +35,8 @@ try:
 except Exception as e:
     ai_model = None
     print(f"Warning: Could not load ML model. Error: {e}")
-#MODELS
+
+# --- MODELS ---
 class NewUser(BaseModel):
     email: str
     password: str
@@ -46,6 +51,7 @@ class NewUser(BaseModel):
     em4: str
     em5: str
     em6: str
+
 class UpdateUser(BaseModel):
     current_email: str
     email: str
@@ -60,16 +66,20 @@ class UpdateUser(BaseModel):
     em4: str
     em5: str
     em6: str
+
 class EmergencyPayload(BaseModel):
     user_id: str
     latitude: float = None
     longitude: float = None
+
 class TriagePayload(BaseModel):
     type: str
     services: dict = {}
-#DATABASE SETUP
+
+# --- DATABASE SETUP ---
 def get_db_connection():
     return psycopg2.connect(os.getenv('DATABASE_URL'))
+
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -93,12 +103,14 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
+
 init_db()
-#HELPER FUNCTIONS
+
+# --- HELPER FUNCTIONS ---
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
+
 def find_nearest_services(lat, lon):
-    # Queries Overpass for Hospitals. Police & Ambulance are simulated placeholders for now.
     overpass_url = "http://overpass-api.de/api/interpreter"
     overpass_query = f"""
     [out:json];
@@ -120,15 +132,13 @@ def find_nearest_services(lat, lon):
         "police_station": "Local Precinct (Simulated)",
         "ambulance": "City EMS Dispatch (Simulated)"
     }
-#BACKGROUND TASK: CRASH PREVENTION
+
+# --- BACKGROUND TASK: CRASH PREVENTION ---
 def process_emergency_alerts(contacts, services, lat, lon):
-    """Handles TextBee SMS and Webhooks asynchronously so the app doesn't crash."""
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
     TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID")
 
-    # 1. Send SMS via TextBee using the mobile SIM
     if TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID:
-        # Filter out empty or invalid contacts
         valid_contacts = [c for c in contacts if c and len(c) >= 5]
         
         if valid_contacts:
@@ -143,7 +153,6 @@ def process_emergency_alerts(contacts, services, lat, lon):
                 f"⚠️ Immediate assistance required at scene!"
             )
 
-            # TextBee API endpoint for sending SMS
             url = f"https://api.textbee.dev/api/v1/gateway/devices/{TEXTBEE_DEVICE_ID}/send-sms"
             
             headers = {
@@ -151,7 +160,6 @@ def process_emergency_alerts(contacts, services, lat, lon):
                 "Content-Type": "application/json"
             }
 
-            # TextBee accepts multiple recipients in a single payload
             payload = {
                 "recipients": valid_contacts,
                 "message": alert_text
@@ -168,7 +176,6 @@ def process_emergency_alerts(contacts, services, lat, lon):
     else:
         print("TextBee credentials missing in .env file.")
 
-    #Alert Hospital/Police/Ambulance via Webhook
     hospital_webhook_url = os.getenv('HOSPITAL_WEBHOOK_URL')
     if hospital_webhook_url:
         dispatch_payload = {
@@ -183,17 +190,21 @@ def process_emergency_alerts(contacts, services, lat, lon):
                 break 
             except requests.exceptions.RequestException:
                 time.sleep(2)
-#API ROUTES
+
+# --- API ROUTES ---
 @app.get("/")
 async def root():
     return {"message": "Raksham AWS Backend is Online!"}
+
 @app.post("/register")
 async def register_user(user: NewUser):
     conn = get_db_connection()
     cursor = conn.cursor()
     new_user_id = str(uuid.uuid4())
     hashed_pw = hash_password(user.password)
+    
     try:
+        # SQL FIX: Changed '?' to '%s'
         cursor.execute('''
             INSERT INTO users (user_id, email, password, name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6) 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -217,6 +228,8 @@ async def login_user(data: dict):
     hashed_pw = hash_password(password)
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # SQL FIX: Changed '?' to '%s'
     cursor.execute('SELECT user_id FROM users WHERE email = %s AND password = %s', (email, hashed_pw))
     user = cursor.fetchone()
     conn.close()
@@ -230,13 +243,15 @@ async def retrieve_profile_data(data: dict):
     email = data.get("email")
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # SQL FIX: Changed '?' to '%s'
     cursor.execute('SELECT * FROM users WHERE email = %s', (email,))
     user = cursor.fetchone()
     conn.close()
     
     if user:
         user_id = user[0]
-        # CHANGE TO YOUR AWS AMPLIFY DOMAIN ONCE DEPLOYED
+        # Vercel URL for the QR Code
         profile_url = f"https://raksham-pi.vercel.app/index.html?id={user_id}"
         qr = qrcode.QRCode(version=2, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
         qr.add_data(profile_url)
@@ -263,6 +278,7 @@ async def update_profile(data: UpdateUser):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        # SQL FIX: Changed '?' to '%s'
         cursor.execute('''
             UPDATE users 
             SET email=%s, name=%s, blood_group=%s, allergies=%s, conditions=%s, phone=%s, em1=%s, em2=%s, em3=%s, em4=%s, em5=%s, em6=%s
@@ -279,6 +295,8 @@ async def update_profile(data: UpdateUser):
 async def get_public_profile(user_id: str):
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # SQL FIX: Changed '?' to '%s'
     cursor.execute('SELECT name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s', (user_id,))
     user = cursor.fetchone()
     conn.close()
@@ -301,24 +319,22 @@ async def trigger_emergency(request: Request, payload: EmergencyPayload, backgro
         return {"status": "error", "message": "Rate limit exceeded. Please wait."}
     recent_requests[client_ip] = current_time
 
-    #Fetch user's emergency contacts from DB
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # SQL FIX: Changed '?' to '%s'
     cursor.execute('SELECT em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s', (payload.user_id,))
     row = cursor.fetchone()
     conn.close()
     
     contacts = [num for num in row if num] if row else []
 
-    #Get nearest services
     services = find_nearest_services(payload.latitude, payload.longitude) if payload.latitude else {
         "hospital": "Unknown Medical Facility", "police_station": "Unknown Police", "ambulance": "Unknown EMS"
     }
 
-    # Hand off SMS & Webhooks to Background Task to prevent crashes
     background_tasks.add_task(process_emergency_alerts, contacts, services, payload.latitude, payload.longitude)
 
-    #Return services immediately to frontend for the AI Triage
     return {"status": "success", "message": "Emergency alerted securely.", "services": services}
 
 @app.post("/ai_triage")
@@ -329,11 +345,9 @@ async def ai_triage(payload: TriagePayload):
 
     if ai_model:
         try:
-            #Format inputs based on RF model architecture
             input_features = np.zeros((1, ai_model.n_features_in_)) 
             prediction = ai_model.predict(input_features)
             
-            #AI Now has context of the dispatched units
             guidance = [
                 f"AI Assessment: {str(prediction[0])}", 
                 f"Help is en route from: {dispatched.get('hospital')} and {dispatched.get('ambulance')}."
@@ -341,7 +355,6 @@ async def ai_triage(payload: TriagePayload):
         except Exception as e:
             guidance = [f"Model Inference Error: {str(e)}", "1. Wait for emergency services."]
     else:
-        #Fallback guidance incorporating dynamic hospital/police data
         guidance = [
             f"<strong>Incident Logged:</strong> {incident_type}",
             f"<strong>Ambulance:</strong> {dispatched.get('ambulance')} dispatched.",
