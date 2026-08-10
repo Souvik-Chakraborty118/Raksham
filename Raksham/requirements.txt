@@ -4,6 +4,7 @@ pydantic
 python-dotenv
 requests
 qrcode
+pillow
 joblib
 numpy
 scikit-learn
