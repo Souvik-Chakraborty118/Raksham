@@ -273,7 +273,7 @@ async def update_profile(data: UpdateUser):
         return {"error": "New email is already taken by another account."}
     finally:
         conn.close()
-    return {"status": "success"}
+    return {"status": "success", "new_email": data.email}
 
 @app.get("/profile/{user_id}")
 async def get_public_profile(user_id: str):
