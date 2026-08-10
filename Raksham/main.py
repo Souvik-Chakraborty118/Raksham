@@ -12,10 +12,7 @@ import hashlib
 from dotenv import load_dotenv
 import joblib
 import numpy as np
-
-# AWS Database Imports
 import psycopg2
-from psycopg2.extras import RealDictCursor
 from psycopg2 import IntegrityError
 
 load_dotenv()
@@ -28,7 +25,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- LOAD ML MODEL ---
 MODEL_PATH = "models/multilingual_rf_model.pkl"
 try:
     ai_model = joblib.load(MODEL_PATH)
@@ -37,7 +33,6 @@ except Exception as e:
     ai_model = None
     print(f"Warning: Could not load ML model. Error: {e}")
 
-# --- MODELS ---
 class NewUser(BaseModel):
     email: str
     password: str
@@ -77,10 +72,8 @@ class TriagePayload(BaseModel):
     type: str
     services: dict = {}
 
-# --- DATABASE SETUP ---
 def get_db_connection():
-    # FIXED: RealDictCursor guarantees data is fetched by column name, not number
-    return psycopg2.connect(os.getenv('DATABASE_URL'), cursor_factory=RealDictCursor)
+    return psycopg2.connect(os.getenv('DATABASE_URL'))
 
 def init_db():
     conn = get_db_connection()
@@ -108,7 +101,6 @@ def init_db():
 
 init_db()
 
-# --- HELPER FUNCTIONS ---
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -135,7 +127,6 @@ def find_nearest_services(lat, lon):
         "ambulance": "City EMS Dispatch (Simulated)"
     }
 
-# --- BACKGROUND TASK: CRASH PREVENTION ---
 def process_emergency_alerts(contacts, services, lat, lon):
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
     TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID")
@@ -168,15 +159,9 @@ def process_emergency_alerts(contacts, services, lat, lon):
             }
 
             try:
-                response = requests.post(url, json=payload, headers=headers, timeout=5)
-                if response.status_code == 200:
-                    print(f"TextBee SMS broadcast queued successfully for {len(valid_contacts)} contacts!")
-                else:
-                    print(f"TextBee API Error: {response.text}")
-            except Exception as e:
-                print(f"Failed to send TextBee alert: {e}")
-    else:
-        print("TextBee credentials missing in .env file.")
+                requests.post(url, json=payload, headers=headers, timeout=5)
+            except:
+                pass
 
     hospital_webhook_url = os.getenv('HOSPITAL_WEBHOOK_URL')
     if hospital_webhook_url:
@@ -190,10 +175,9 @@ def process_emergency_alerts(contacts, services, lat, lon):
             try:
                 requests.post(hospital_webhook_url, json=dispatch_payload, timeout=5)
                 break 
-            except requests.exceptions.RequestException:
+            except:
                 time.sleep(2)
 
-# --- API ROUTES ---
 @app.get("/")
 async def root():
     return {"message": "Raksham AWS Backend is Online!"}
@@ -244,32 +228,32 @@ async def retrieve_profile_data(data: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('SELECT * FROM users WHERE email = %s', (email,))
+    # EXPLICIT SQL COLUMN SELECTION TO PREVENT TUPLE INDEX ERRORS
+    cursor.execute('''
+        SELECT user_id, email, name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6 
+        FROM users WHERE email = %s
+    ''', (email,))
     user = cursor.fetchone()
     conn.close()
     
     if user:
-        user_id = user['user_id']
+        user_id = user[0]
         profile_url = f"https://raksham-pi.vercel.app/index.html?id={user_id}"
         
-        # FIXED: version=None auto-scales the QR code so long URLs never crash it
-        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
-        qr.add_data(profile_url)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
+        # BULLETPROOF QR CODE GENERATION (Dynamically scales to fit Vercel URLs)
+        img = qrcode.make(profile_url)
         buffered = BytesIO()
         img.save(buffered, format="PNG")
         qr_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
         
-        # FIXED: Fetching by dictionary key name prevents IndexErrors
         return {
             "status": "success",
             "qr_image": f"data:image/png;base64,{qr_base64}",
             "user_data": {
-                "email": user['email'], "name": user['name'], "blood_group": user['blood_group'],
-                "allergies": user['allergies'], "conditions": user['conditions'], "phone": user['phone'],
-                "em1": user['em1'], "em2": user['em2'], "em3": user['em3'],
-                "em4": user['em4'], "em5": user['em5'], "em6": user['em6']
+                "email": user[1], "name": user[2], "blood_group": user[3],
+                "allergies": user[4], "conditions": user[5], "phone": user[6],
+                "em1": user[7], "em2": user[8], "em3": user[9],
+                "em4": user[10], "em5": user[11], "em6": user[12]
             }
         }
     return {"error": "User not found."}
@@ -296,11 +280,19 @@ async def get_public_profile(user_id: str):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('SELECT name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s', (user_id,))
+    cursor.execute('''
+        SELECT name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6 
+        FROM users WHERE user_id = %s
+    ''', (user_id,))
     user = cursor.fetchone()
     conn.close()
+    
     if user:
-        return dict(user) # Automatically maps the dictionary keys
+        return {
+            "name": user[0], "blood_group": user[1], "allergies": user[2], 
+            "conditions": user[3], "phone": user[4], "em1": user[5],
+            "em2": user[6], "em3": user[7], "em4": user[8], "em5": user[9], "em6": user[10]
+        }
     return {"error": "User not found"}
 
 recent_requests = {}
@@ -321,18 +313,13 @@ async def trigger_emergency(request: Request, payload: EmergencyPayload, backgro
     row = cursor.fetchone()
     conn.close()
     
-    if row:
-        contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']]
-    else:
-        contacts = []
-        
-    valid_contacts = [num for num in contacts if num]
+    contacts = [num for num in row if num] if row else []
 
     services = find_nearest_services(payload.latitude, payload.longitude) if payload.latitude else {
         "hospital": "Unknown Medical Facility", "police_station": "Unknown Police", "ambulance": "Unknown EMS"
     }
 
-    background_tasks.add_task(process_emergency_alerts, valid_contacts, services, payload.latitude, payload.longitude)
+    background_tasks.add_task(process_emergency_alerts, contacts, services, payload.latitude, payload.longitude)
 
     return {"status": "success", "message": "Emergency alerted securely.", "services": services}
 
