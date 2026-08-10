@@ -15,6 +15,7 @@ import numpy as np
 
 # AWS Database Imports
 import psycopg2
+from psycopg2.extras import RealDictCursor
 from psycopg2 import IntegrityError
 
 load_dotenv()
@@ -78,7 +79,8 @@ class TriagePayload(BaseModel):
 
 # --- DATABASE SETUP ---
 def get_db_connection():
-    return psycopg2.connect(os.getenv('DATABASE_URL'))
+    # FIXED: RealDictCursor guarantees data is fetched by column name, not number
+    return psycopg2.connect(os.getenv('DATABASE_URL'), cursor_factory=RealDictCursor)
 
 def init_db():
     conn = get_db_connection()
@@ -204,7 +206,6 @@ async def register_user(user: NewUser):
     hashed_pw = hash_password(user.password)
     
     try:
-        # SQL FIX: Changed '?' to '%s'
         cursor.execute('''
             INSERT INTO users (user_id, email, password, name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6) 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -229,7 +230,6 @@ async def login_user(data: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # SQL FIX: Changed '?' to '%s'
     cursor.execute('SELECT user_id FROM users WHERE email = %s AND password = %s', (email, hashed_pw))
     user = cursor.fetchone()
     conn.close()
@@ -244,16 +244,16 @@ async def retrieve_profile_data(data: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # SQL FIX: Changed '?' to '%s'
     cursor.execute('SELECT * FROM users WHERE email = %s', (email,))
     user = cursor.fetchone()
     conn.close()
     
     if user:
-        user_id = user[0]
-        # Vercel URL for the QR Code
+        user_id = user['user_id']
         profile_url = f"https://raksham-pi.vercel.app/index.html?id={user_id}"
-        qr = qrcode.QRCode(version=2, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
+        
+        # FIXED: version=None auto-scales the QR code so long URLs never crash it
+        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
         qr.add_data(profile_url)
         qr.make(fit=True)
         img = qr.make_image(fill_color="black", back_color="white")
@@ -261,14 +261,15 @@ async def retrieve_profile_data(data: dict):
         img.save(buffered, format="PNG")
         qr_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
         
+        # FIXED: Fetching by dictionary key name prevents IndexErrors
         return {
             "status": "success",
             "qr_image": f"data:image/png;base64,{qr_base64}",
             "user_data": {
-                "email": user[1], "name": user[3], "blood_group": user[4],
-                "allergies": user[5], "conditions": user[6], "phone": user[7],
-                "em1": user[8], "em2": user[9], "em3": user[10],
-                "em4": user[11], "em5": user[12], "em6": user[13]
+                "email": user['email'], "name": user['name'], "blood_group": user['blood_group'],
+                "allergies": user['allergies'], "conditions": user['conditions'], "phone": user['phone'],
+                "em1": user['em1'], "em2": user['em2'], "em3": user['em3'],
+                "em4": user['em4'], "em5": user['em5'], "em6": user['em6']
             }
         }
     return {"error": "User not found."}
@@ -278,7 +279,6 @@ async def update_profile(data: UpdateUser):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # SQL FIX: Changed '?' to '%s'
         cursor.execute('''
             UPDATE users 
             SET email=%s, name=%s, blood_group=%s, allergies=%s, conditions=%s, phone=%s, em1=%s, em2=%s, em3=%s, em4=%s, em5=%s, em6=%s
@@ -296,16 +296,11 @@ async def get_public_profile(user_id: str):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # SQL FIX: Changed '?' to '%s'
     cursor.execute('SELECT name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s', (user_id,))
     user = cursor.fetchone()
     conn.close()
     if user:
-        return {
-            "name": user[0], "blood_group": user[1], "allergies": user[2], 
-            "conditions": user[3], "phone": user[4], "em1": user[5],
-            "em2": user[6], "em3": user[7], "em4": user[8], "em5": user[9], "em6": user[10]
-        }
+        return dict(user) # Automatically maps the dictionary keys
     return {"error": "User not found"}
 
 recent_requests = {}
@@ -322,18 +317,22 @@ async def trigger_emergency(request: Request, payload: EmergencyPayload, backgro
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # SQL FIX: Changed '?' to '%s'
     cursor.execute('SELECT em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s', (payload.user_id,))
     row = cursor.fetchone()
     conn.close()
     
-    contacts = [num for num in row if num] if row else []
+    if row:
+        contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']]
+    else:
+        contacts = []
+        
+    valid_contacts = [num for num in contacts if num]
 
     services = find_nearest_services(payload.latitude, payload.longitude) if payload.latitude else {
         "hospital": "Unknown Medical Facility", "police_station": "Unknown Police", "ambulance": "Unknown EMS"
     }
 
-    background_tasks.add_task(process_emergency_alerts, contacts, services, payload.latitude, payload.longitude)
+    background_tasks.add_task(process_emergency_alerts, valid_contacts, services, payload.latitude, payload.longitude)
 
     return {"status": "success", "message": "Emergency alerted securely.", "services": services}
 
