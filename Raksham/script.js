@@ -4,9 +4,7 @@ let timeLeft = 10;
 let isEditMode = false;
 let dispatchedServices = {}; // Stores hospital/police data for the AI
 //UPDATE TO AWS EC2 IP ONCE DEPLOYED (e.g., 'http://18.22.45.6:8000')
-const API_BASE_URL = window.location.origin.includes('http') 
-    ? window.location.origin 
-    : 'http://127.0.0.1:8000';
+const API_BASE_URL = 'https://raksham-backend.onrender.com';
 
 window.onload = async () => {
     const publicProfileName = document.getElementById('profile-name');
