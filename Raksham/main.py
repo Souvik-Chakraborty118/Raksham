@@ -348,28 +348,29 @@ async def trigger_emergency(request: Request, payload: EmergencyPayload, backgro
 async def ai_triage(payload: TriagePayload):
     incident_type = payload.type
     dispatched = payload.services
-    guidance = []
+    
+    #Response map data
+    guidance = [
+        f"<strong>Incident Logged:</strong> {incident_type}",
+        f"<strong> Nearest Hospital:</strong><br>{dispatched.get('hospital')}",
+        f"<strong> Nearest Police Station:</strong><br>{dispatched.get('police_station')}",
+        f"<strong> Nearest Ambulance Service:</strong><br>{dispatched.get('ambulance')}",
+        "<br><strong style='color:#FF003C;'>IMMEDIATE ACTIONS:</strong>",
+        "1. Do not leave the victim unattended.",
+        "2. Keep them breathing and conscious.",
+        "3. Click the phone numbers above to call immediately if help has not arrived."
+    ]
 
+    #Inject AI Prediction at the top if the model loaded
     if ai_model:
         try:
             input_features = np.zeros((1, ai_model.n_features_in_)) 
             prediction = ai_model.predict(input_features)
             
-            guidance = [
-                f"AI Assessment: {str(prediction[0])}", 
-                f"Help is en route from: {dispatched.get('hospital')} and {dispatched.get('ambulance')}."
-            ]
+            ai_text = f"<span style='color:#FF003C; font-weight:900;'>AI SEVERITY ASSESSMENT: LEVEL {str(prediction[0])}</span>"
+            guidance.insert(0, ai_text)
+            
         except Exception as e:
-            guidance = [f"Model Inference Error: {str(e)}", "1. Wait for emergency services."]
-    else:
-        guidance = [
-            f"<strong>Incident Logged:</strong> {incident_type}",
-            f"<strong>Ambulance:</strong> {dispatched.get('ambulance')} dispatched.",
-            f"<strong>Hospital Alerted:</strong> {dispatched.get('hospital')}",
-            f"<strong>Police Notified:</strong> {dispatched.get('police_station')}",
-            "<br><strong>IMMEDIATE ACTIONS:</strong>",
-            "1. Do not leave the victim unattended.",
-            "2. Keep them breathing and conscious."
-        ]
+            print(f"Model Error: {e}")
 
     return {"status": "success", "suggestions": guidance}
