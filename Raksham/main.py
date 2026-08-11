@@ -104,27 +104,48 @@ init_db()
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
 
-def find_nearest_services(lat, lon):
+def fetch_facility(tag_key, tag_value, lat, lon):
     overpass_url = "http://overpass-api.de/api/interpreter"
-    overpass_query = f"""
+    query = f"""
     [out:json];
-    node["amenity"="hospital"](around:5000,{lat},{lon});
+    node["{tag_key}"="{tag_value}"](around:5000,{lat},{lon});
     out 1;
     """
-    headers = {"User-Agent": "RakshamEmergencyApp/1.0"}
-    hospital_name = "Nearest Medical Facility (General Area)"
     try:
-        response = requests.post(overpass_url, data={'data': overpass_query}, headers=headers, timeout=5)
+        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/1.0"}, timeout=5)
         elements = response.json().get('elements', [])
         if elements:
-            hospital_name = elements[0].get('tags', {}).get('name', hospital_name)
-    except:
-        pass
+            tags = elements[0].get('tags', {})
+            name = tags.get('name', f'Unnamed {tag_value.replace("_", " ").title()}')
+            phone = tags.get('phone', tags.get('contact:phone', 'Phone Not Listed'))
+            
+            # Build Address
+            addr_full = tags.get('addr:full', '')
+            street = tags.get('addr:street', '')
+            city = tags.get('addr:city', '')
+            
+            address = addr_full if addr_full else ", ".join([p for p in [street, city] if p])
+            if not address:
+                address = "Address Not Listed"
+                
+            return f"<span style='color:#333; font-weight:bold;'>{name}</span><br>📍 {address}<br>📞 <a href='tel:{phone}' style='color:#FF003C;'>{phone}</a>"
+    except Exception as e:
+        print(f"Map API Error: {e}")
+        
+    return f"No {tag_value.replace('_', ' ')} found within 5km."
 
+def find_nearest_services(lat, lon):
+    if not lat or not lon:
+        return {
+            "hospital": "Location not provided by GPS.",
+            "police_station": "Location not provided by GPS.",
+            "ambulance": "Location not provided by GPS."
+        }
+    
     return {
-        "hospital": hospital_name,
-        "police_station": "Local Precinct (Simulated)",
-        "ambulance": "City EMS Dispatch (Simulated)"
+        "hospital": fetch_facility("amenity", "hospital", lat, lon),
+        "police_station": fetch_facility("amenity", "police", lat, lon),
+        "ambulance": fetch_facility("emergency", "ambulance_station", lat, lon)
     }
 
 def process_emergency_alerts(contacts, services, lat, lon):
