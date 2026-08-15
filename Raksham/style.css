@@ -327,3 +327,43 @@ hr {
         transform: scale(1.02);
     }
 }
+/* --- UNIQUE UI ANIMATIONS --- */
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes heartbeatPulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 0, 60, 0.7); }
+    70% { box-shadow: 0 0 0 15px rgba(255, 0, 60, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 0, 60, 0); }
+}
+
+@keyframes slowFloat {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+    100% { transform: translateY(0px); }
+}
+
+/* Apply fade-up to all major screens */
+.hidden { display: none !important; }
+div:not(.hidden) {
+    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Add the floating effect to your logo */
+.raksham-logo {
+    animation: logoShine 1.5s infinite alternate ease-in-out, slowFloat 4s infinite ease-in-out !important;
+}
+
+/* Add heartbeat pulse to all red primary buttons */
+button[style*="background:#FF003C"], .emergency-btn {
+    animation: heartbeatPulse 2s infinite;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+button[style*="background:#FF003C"]:hover, .emergency-btn:hover {
+    transform: scale(1.03);
+    filter: brightness(1.1);
+}
