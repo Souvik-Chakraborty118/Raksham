@@ -85,7 +85,7 @@ async function triggerBackendAlert() {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({ user_id: userId, lat: pos.coords.latitude, lon: pos.coords.longitude })
-                        });
+                        }).catch(e => console.log("Live tracking offline."));
                     }, (err) => console.log(err), { enableHighAccuracy: true });
 
                     await sendEmergencyPayload({ user_id: userId, latitude: position.coords.latitude, longitude: position.coords.longitude });
@@ -106,6 +106,9 @@ async function triggerBackendAlert() {
     });
 }
 
+// -------------------------------------------------------------
+// EMERGENCY PAYLOAD (Checks for internet failure)
+// -------------------------------------------------------------
 async function sendEmergencyPayload(payload) {
     try {
         let response = await fetch(`${API_BASE_URL}/trigger_emergency`, {
@@ -118,7 +121,8 @@ async function sendEmergencyPayload(payload) {
             dispatchedServices = data.services;
         }
     } catch (error) {
-        console.log("Backend not connected yet.");
+        console.log("No internet connection detected. Triggering Offline Fallback.");
+        triggerOfflineFallback(payload.latitude, payload.longitude);
     }
 }
 
@@ -130,7 +134,11 @@ async function sendTriage(type) {
 
     document.getElementById('triage-screen').classList.add('hidden');
     document.getElementById('guidance-screen').classList.remove('hidden');
-    document.getElementById('ai-suggestions').innerHTML = "<h3 style='color:#FF003C;'>Connecting to satellites and dispatching services...</h3><p>Please wait up to 5 seconds for GPS to lock on.</p>";
+    
+    // Only show loading if the offline fallback hasn't already taken over the screen
+    if (!document.getElementById('ai-suggestions').innerHTML.includes('OFFLINE SOS')) {
+        document.getElementById('ai-suggestions').innerHTML = "<h3 style='color:#FF003C;'>Connecting to satellites and dispatching services...</h3><p>Please wait up to 10 seconds for GPS to lock on.</p>";
+    }
     
     await emergencyPromise;
     
@@ -161,7 +169,25 @@ async function sendTriage(type) {
             </div>
         `;
     } catch (error) {
-        document.getElementById('ai-suggestions').innerHTML = "Emergency logged. Please wait for the ambulance.";
+        // Prevent overwriting the WhatsApp screen if offline
+        if (!document.getElementById('ai-suggestions').innerHTML.includes('OFFLINE SOS')) {
+            document.getElementById('ai-suggestions').innerHTML = "Emergency logged. Please wait for the ambulance.";
+        }
+    }
+}
+
+async function alertAuthorities() {
+    alert("Dispatching coordinates to local authorities. Please hold.");
+    try {
+        let res = await fetch(`${API_BASE_URL}/alert_authorities`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({services: dispatchedServices})
+        });
+        let data = await res.json();
+        alert(data.message);
+    } catch (e) {
+        alert("Failed to connect to local dispatch. Check internet.");
     }
 }
 
@@ -179,8 +205,7 @@ async function sendChatMessage() {
         let res = await fetch(`${API_BASE_URL}/chat`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            // ADDED: Passing the dispatchedServices variable to the backend
-            body: JSON.stringify({ message: msg, services: dispatchedServices })
+            body: JSON.stringify({message: msg, services: dispatchedServices})
         });
         let data = await res.json();
         log.innerHTML += `<div style="margin-top:8px;"><strong style='color:#FF003C;'>AI:</strong> ${data.reply}</div>`;
@@ -196,7 +221,6 @@ async function sendChatMessage() {
     }
 }
 
-// SPEECH TO TEXT ENGINE
 function startVoiceRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -215,7 +239,7 @@ function startVoiceRecognition() {
         document.getElementById('chat-input').value = transcript;
         document.getElementById('mic-btn').style.background = '#333';
         document.getElementById('chat-input').placeholder = "Type or speak...";
-        sendChatMessage(); // Auto-send the voice note to AI
+        sendChatMessage(); 
     };
     
     recognition.onerror = function() {
@@ -302,6 +326,9 @@ async function loadProfileData() {
                 document.getElementById('download-link').href = data.qr_image;
                 document.getElementById('download-btn').style.display = "inline-block";
             }
+            
+            // CACHE CONTACTS FOR OFFLINE USE
+            localStorage.setItem('raksham_em_contacts', JSON.stringify([u.em1, u.em2, u.em3, u.em4, u.em5, u.em6].filter(Boolean)));
         }
     } catch (error) { console.error("Error retrieving profile data:", error); }
 }
@@ -328,6 +355,57 @@ async function saveProfile() {
             closeMenu(); await loadProfileData(); alert("Updated successfully.");
         }
     } catch (error) { alert("Error updating profile details."); }
+}
+
+function logout() { localStorage.removeItem('raksham_user_email'); window.location.href = 'login.html'; }
+
+// -------------------------------------------------------------
+// OFFLINE FALLBACK LOGIC (WHATSAPP & SMS DEEP LINKS)
+// -------------------------------------------------------------
+function triggerOfflineFallback(lat, lon) {
+    // 1. Retrieve the cached emergency contacts
+    const contacts = JSON.parse(localStorage.getItem('raksham_em_contacts') || '[]');
+    
+    // 2. Format the offline message with satellite coordinates
+    const mapsLink = (lat && lon) ? `https://maps.google.com/?q=${lat},${lon}` : 'Location Unknown';
+    const message = `RAKSHAM OFFLINE SOS \n\nI have triggered an emergency alert but have no internet connection. I need immediate help!\n\n📍 My GPS Location: ${mapsLink}`;
+
+    // 3. Generate the WhatsApp Deep Link using their 1st Emergency Contact
+    let targetNumber = contacts.length > 0 ? contacts[0].replace(/\D/g, '') : "";
+    const waLink = `https://wa.me/${targetNumber}?text=${encodeURIComponent(message)}`;
+    
+    // 4. Generate the Native Carrier SMS Deep Link (No Internet Required)
+    let smsLink = '';
+    if (contacts.length > 0) {
+        // Joins numbers with a comma for group texting.
+        const phones = contacts.join(','); 
+        smsLink = `sms:${phones}?body=${encodeURIComponent(message)}`;
+    } else {
+        smsLink = `sms:?body=${encodeURIComponent(message)}`;
+    }
+
+    // 5. Override the UI to show the Offline Dashboard
+    const triageScreen = document.getElementById('triage-screen');
+    const guidanceScreen = document.getElementById('guidance-screen');
+    
+    if (triageScreen) triageScreen.classList.add('hidden');
+    if (guidanceScreen) guidanceScreen.classList.remove('hidden');
+    
+    document.getElementById('ai-suggestions').innerHTML = `
+        <div style="background:#fff3f3; border:2px solid #FF003C; padding:15px; border-radius:10px; margin-bottom:20px;">
+            <h3 style="color:#FF003C; margin-top:0;">⚠️ NO INTERNET CONNECTION</h3>
+            <p style="color:#333; font-weight:bold;">We cannot reach the Raksham servers. Your live tracking is offline.</p>
+            <p style="color:#555; font-size:14px;">Please use the buttons below to manually dispatch your GPS coordinates using your phone's native networks.</p>
+        </div>
+        
+        <a href="${smsLink}" style="display:block; background:#000; color:#fff; padding:16px; border-radius:8px; text-decoration:none; margin-bottom:15px; font-weight:bold; font-size:16px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+            SEND CARRIER SMS<br><span style="font-size:12px; font-weight:normal;">(Requires Cellular Signal Only)</span>
+        </a>
+        
+        <a href="${waLink}" target="_blank" style="display:block; background:#25D366; color:#fff; padding:16px; border-radius:8px; text-decoration:none; font-weight:bold; font-size:16px; box-shadow: 0 4px 10px rgba(37,211,102,0.3);">
+            SEND VIA WHATSAPP<br><span style="font-size:12px; font-weight:normal;">(Requires Weak Data/Wi-Fi)</span>
+        </a>
+    `;
 }
 
 function logout() { localStorage.removeItem('raksham_user_email'); window.location.href = 'login.html'; }
