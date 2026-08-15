@@ -207,11 +207,8 @@ recent_requests = {}
 
 @app.post("/trigger_emergency")
 async def trigger_emergency(request: Request, payload: EmergencyPayload, background_tasks: BackgroundTasks):
-    client_ip = request.client.host
-    current_time = time.time()
-    if client_ip in recent_requests and (current_time - recent_requests[client_ip]) < 60:
-        return {"status": "error", "message": "Rate limit exceeded. Please wait."}
-    recent_requests[client_ip] = current_time
+    # The 60-second rate limiter has been completely removed.
+    # The server will now fetch and return the nearest location details every single time you click.
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -220,13 +217,15 @@ async def trigger_emergency(request: Request, payload: EmergencyPayload, backgro
     conn.close()
     
     contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']] if row else []
+    
+    # Scrapes the map using the GPS coordinates sent from the frontend
     services = find_nearest_services(payload.latitude, payload.longitude)
 
     # Trigger background SMS strictly to emergency contacts
     background_tasks.add_task(process_emergency_alerts, contacts, services, payload.latitude, payload.longitude, payload.user_id)
 
     return {"status": "success", "services": services}
-
+    
 @app.post("/update_location")
 async def update_location(payload: dict):
     user_id = payload.get("user_id")
