@@ -292,14 +292,14 @@ async def chat(data: dict):
     
     headers = {"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"}
     payload = {
-        "model": "mixtral-8x7b-32768",
+        "model": "llama3-8b-8192", # <-- UPDATED TO A SUPPORTED, FAST MODEL
         "messages": [
             {"role": "system", "content": "You are Raksham AI. Give extremely concise, life-saving first-aid advice in 2 sentences max."},
             {"role": "user", "content": data.get("message", "")}
         ]
     }
     try:
-        resp = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12) # Increased to 12 seconds
+        resp = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12) 
         resp_data = resp.json()
         
         # Safely parse response or print the actual API error
@@ -308,6 +308,9 @@ async def chat(data: dict):
         else:
             api_error = resp_data.get('error', {}).get('message', 'Check API Key')
             return {"reply": f"Groq API Error: {api_error}"}
+            
+    except Exception as e:
+        return {"reply": f"AI Request Timeout/Error: {str(e)}"}
             
     except Exception as e:
         return {"reply": f"AI Request Timeout/Error: {str(e)}"}
