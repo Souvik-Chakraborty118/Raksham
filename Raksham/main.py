@@ -12,7 +12,6 @@ import hashlib
 from dotenv import load_dotenv
 import joblib
 import numpy as np
-import math
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2 import IntegrityError
@@ -59,7 +58,8 @@ def get_db_connection():
 
 # --- IN-MEMORY LIVE TRACKING ---
 live_locations = {}
-#ADVANCE MAP
+
+# --- ADVANCED MAP SCRAPING ---
 def fetch_facility(tag_key, tag_value, lat, lon):
     overpass_url = "http://overpass-api.de/api/interpreter"
     query = f"""
@@ -118,6 +118,17 @@ def fetch_facility(tag_key, tag_value, lat, lon):
         "name": f"Nearest {formatted_type}",
         "phone": None
     }
+
+def find_nearest_services(lat, lon):
+    if not lat or not lon:
+        return {k: {"html": "GPS disabled. Please allow location.", "name": "Unknown", "phone": None} for k in ["hospital", "police_station", "ambulance"]}
+    
+    return {
+        "hospital": fetch_facility("amenity", "hospital", lat, lon),
+        "police_station": fetch_facility("amenity", "police", lat, lon),
+        "ambulance": fetch_facility("emergency", "ambulance_station", lat, lon)
+    }
+
 # --- SMS TO EMERGENCY CONTACTS ONLY ---
 def process_emergency_alerts(contacts, services, lat, lon, user_id):
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
@@ -265,9 +276,8 @@ async def alert_authorities(payload: dict):
             
     valid_phones = ["".join(c for c in p if c.isdigit() or c == '+') for p in phones if len(p) >= 5]
     
-    # Strictly use local authority numbers from the map source. No national fallback.
     if not valid_phones:
-        return {"status": "error", "message": "No recorded local authority phone numbers found nearby."}
+        return {"status": "error", "message": "No valid public phone numbers found for nearby authorities."}
 
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
     TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID")
