@@ -59,23 +59,7 @@ def get_db_connection():
 
 # --- IN-MEMORY LIVE TRACKING ---
 live_locations = {}
-
-# --- DISTANCE CALCULATOR ---
-def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371.0 # Radius of Earth in KM
-    lat1_rad = math.radians(float(lat1))
-    lon1_rad = math.radians(float(lon1))
-    lat2_rad = math.radians(float(lat2))
-    lon2_rad = math.radians(float(lon2))
-
-    dlon = lon2_rad - lon1_rad
-    dlat = lat2_rad - lat1_rad
-
-    a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
-
-# --- ADVANCED MAP SCRAPING ---
+#ADVANCE MAP
 def fetch_facility(tag_key, tag_value, lat, lon):
     overpass_url = "http://overpass-api.de/api/interpreter"
     query = f"""
@@ -84,30 +68,29 @@ def fetch_facility(tag_key, tag_value, lat, lon):
     out center;
     """
     try:
-        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/4.0"}, timeout=10)
+        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/3.2"}, timeout=5)
         elements = response.json().get('elements', [])
-        
         if elements:
-            # Calculate distance for every found location
-            for el in elements:
+            # Sort all nearby places by exact distance
+            def calc_dist(el):
                 el_lat = el.get('lat') or el.get('center', {}).get('lat', lat)
                 el_lon = el.get('lon') or el.get('center', {}).get('lon', lon)
-                el['dist_km'] = calculate_distance(lat, lon, el_lat, el_lon)
-                el['exact_lat'] = el_lat
-                el['exact_lon'] = el_lon
-                
-            # Sort to guarantee we grab the absolute closest one
-            elements.sort(key=lambda x: x['dist_km'])
+                return (float(el_lat) - float(lat))**2 + (float(el_lon) - float(lon))**2
             
+            elements.sort(key=calc_dist)
+            
+            # 1. Keep the absolute closest place for the Name and Address
             closest_facility = elements[0]
             tags = closest_facility.get('tags', {})
-            
             name = tags.get('name', f'Unnamed {tag_value.replace("_", " ").title()}')
-            dist_km = closest_facility['dist_km']
-            dest_lat = closest_facility['exact_lat']
-            dest_lon = closest_facility['exact_lon']
+            
+            addr_full = tags.get('addr:full', '')
+            street = tags.get('addr:street', '')
+            city = tags.get('addr:city', '')
+            address = addr_full if addr_full else ", ".join([p for p in [street, city] if p])
+            if not address: address = "Address Not Listed"
 
-            # Find nearest valid phone number
+            # 2. Scan the source data for the nearest recorded local phone number
             closest_phone = None
             for el in elements:
                 el_tags = el.get('tags', {})
@@ -117,27 +100,24 @@ def fetch_facility(tag_key, tag_value, lat, lon):
                     break
                     
             display_phone = closest_phone if closest_phone else 'Phone Not Listed'
-            
-            # Generate Direct Google Maps Directions link
-            maps_link = f"https://www.google.com/maps/dir/?api=1&origin={lat},{lon}&destination={dest_lat},{dest_lon}"
                 
             return {
-                "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>{name}</span><br>📍 Distance: <strong>{dist_km:.1f} km</strong><br>📞 <a href='tel:{display_phone}' style='color:#FF003C;'>{display_phone}</a><br>🗺️ <a href='{maps_link}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Google Maps Directions</a>",
+                "html": f"<span style='color:#333; font-weight:bold;'>{name}</span><br>📍 {address}<br>📞 <a href='tel:{display_phone}' style='color:#FF003C;'>{display_phone}</a>",
                 "name": name,
                 "phone": closest_phone
             }
     except Exception as e:
         pass
         
-    # Fallback if the map query fails
+    # --- GOOGLE MAPS FALLBACK ---
     formatted_type = tag_value.replace('_', ' ').title()
     maps_link = f"https://www.google.com/maps/search/{tag_value}+near+{lat},{lon}"
+    
     return {
-        "html": f"<span style='color:#888; font-weight:bold;'>Nearest {formatted_type} Data Unavailable</span><br>📍 <a href='{maps_link}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Search Google Maps 🗺️</a>",
+        "html": f"<span style='color:#333; font-weight:bold;'>Nearest {formatted_type}</span><br>📍 <a href='{maps_link}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Open in Google Maps 🗺️</a>",
         "name": f"Nearest {formatted_type}",
         "phone": None
     }
-
 # --- SMS TO EMERGENCY CONTACTS ONLY ---
 def process_emergency_alerts(contacts, services, lat, lon, user_id):
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
