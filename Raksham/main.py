@@ -288,7 +288,7 @@ async def ai_triage(payload: TriagePayload):
 async def chat(data: dict):
     groq_api_key = os.getenv("GROQ_API_KEY")
     if not groq_api_key:
-        return {"reply": "Groq API key is missing. Chatbot offline."}
+        return {"reply": "Groq API key is missing in Render Environment Variables."}
     
     headers = {"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"}
     payload = {
@@ -299,7 +299,15 @@ async def chat(data: dict):
         ]
     }
     try:
-        resp = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=5)
-        return {"reply": resp.json()["choices"][0]["message"]["content"]}
-    except:
-        return {"reply": "AI is currently experiencing heavy load."}
+        resp = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12) # Increased to 12 seconds
+        resp_data = resp.json()
+        
+        # Safely parse response or print the actual API error
+        if "choices" in resp_data:
+            return {"reply": resp_data["choices"][0]["message"]["content"]}
+        else:
+            api_error = resp_data.get('error', {}).get('message', 'Check API Key')
+            return {"reply": f"Groq API Error: {api_error}"}
+            
+    except Exception as e:
+        return {"reply": f"AI Request Timeout/Error: {str(e)}"}
