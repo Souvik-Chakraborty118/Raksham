@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Tracking - RAKSHAM</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body style="text-align: center; padding: 20px; font-family: Arial, sans-serif; background-color: #fcfcfc;">
+    
+    <img src="raksham_logo.jpeg" alt="Raksham Logo" style="width: 130px; border-radius: 12px; margin-bottom: 20px;">
+    <h1 style="color: #FF003C; font-weight: 900;">🚨 LIVE EMERGENCY TRACKING</h1>
+    
+    <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin: 20px auto; max-width: 400px;">
+        <p id="status" style="font-weight: bold; color: #555;">Connecting to victim's phone...</p>
+        <h3 id="coords" style="color: #333; margin: 15px 0;"></h3>
+        
+        <a id="map-btn" href="#" target="_blank" style="display: none; background: #000; color: #fff; padding: 15px 20px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 10px;">
+            📍 OPEN IN GOOGLE MAPS
+        </a>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://raksham-backend.onrender.com';
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('id');
+
+        async function fetchLocation() {
+            if (!userId || userId === 'null') {
+                document.getElementById('status').innerText = "Invalid or Missing Tracking ID.";
+                return;
+            }
+            try {
+                let res = await fetch(`${API_BASE_URL}/get_location/${userId}`);
+                let data = await res.json();
+                
+                if (data.status === "success") {
+                    document.getElementById('status').innerText = "🟢 Live coordinates received!";
+                    document.getElementById('coords').innerText = `Lat: ${data.data.lat.toFixed(5)}\nLon: ${data.data.lon.toFixed(5)}`;
+                    
+                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${data.data.lat},${data.data.lon}`;
+                    const btn = document.getElementById('map-btn');
+                    btn.href = mapsUrl;
+                    btn.style.display = "inline-block";
+                } else {
+                    document.getElementById('status').innerText = "🟡 Waiting for victim's GPS signal...";
+                }
+            } catch (e) {
+                document.getElementById('status').innerText = "🔴 Connection error. Retrying...";
+            }
+        }
+        
+        fetchLocation();
+        setInterval(fetchLocation, 3000);
+    </script>
+</body>
+</html>
