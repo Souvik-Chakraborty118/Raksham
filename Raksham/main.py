@@ -64,27 +64,47 @@ def fetch_facility(tag_key, tag_value, lat, lon):
     overpass_url = "http://overpass-api.de/api/interpreter"
     query = f"""
     [out:json];
-    nwr["{tag_key}"="{tag_value}"](around:8000,{lat},{lon});
-    out center 1;
+    nwr["{tag_key}"="{tag_value}"](around:5000,{lat},{lon});
+    out center;
     """
     try:
-        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/3.0"}, timeout=5)
+        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/3.2"}, timeout=5)
         elements = response.json().get('elements', [])
         if elements:
-            tags = elements[0].get('tags', {})
+            # Sort all nearby places by exact distance
+            def calc_dist(el):
+                el_lat = el.get('lat') or el.get('center', {}).get('lat', lat)
+                el_lon = el.get('lon') or el.get('center', {}).get('lon', lon)
+                return (float(el_lat) - float(lat))**2 + (float(el_lon) - float(lon))**2
+            
+            elements.sort(key=calc_dist)
+            
+            # 1. Keep the absolute closest place for the Name and Address
+            closest_facility = elements[0]
+            tags = closest_facility.get('tags', {})
             name = tags.get('name', f'Unnamed {tag_value.replace("_", " ").title()}')
-            phone = tags.get('phone', tags.get('contact:phone', 'Phone Not Listed'))
             
             addr_full = tags.get('addr:full', '')
             street = tags.get('addr:street', '')
             city = tags.get('addr:city', '')
             address = addr_full if addr_full else ", ".join([p for p in [street, city] if p])
             if not address: address = "Address Not Listed"
+
+            # 2. Scan the source data for the nearest recorded local phone number
+            closest_phone = None
+            for el in elements:
+                el_tags = el.get('tags', {})
+                ph = el_tags.get('phone', el_tags.get('contact:phone'))
+                if ph:
+                    closest_phone = ph
+                    break
+                    
+            display_phone = closest_phone if closest_phone else 'Phone Not Listed'
                 
             return {
-                "html": f"<span style='color:#333; font-weight:bold;'>{name}</span><br>📍 {address}<br>📞 <a href='tel:{phone}' style='color:#FF003C;'>{phone}</a>",
+                "html": f"<span style='color:#333; font-weight:bold;'>{name}</span><br>📍 {address}<br>📞 <a href='tel:{display_phone}' style='color:#FF003C;'>{display_phone}</a>",
                 "name": name,
-                "phone": phone if phone != 'Phone Not Listed' else None
+                "phone": closest_phone
             }
     except Exception as e:
         pass
@@ -256,8 +276,9 @@ async def alert_authorities(payload: dict):
             
     valid_phones = ["".join(c for c in p if c.isdigit() or c == '+') for p in phones if len(p) >= 5]
     
+    # Strictly use local authority numbers from the map source. No national fallback.
     if not valid_phones:
-        return {"status": "error", "message": "No valid public phone numbers found for nearby authorities."}
+        return {"status": "error", "message": "No recorded local authority phone numbers found nearby."}
 
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
     TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID")
