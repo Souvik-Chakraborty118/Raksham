@@ -75,23 +75,35 @@ async function triggerBackendAlert() {
     const urlParams = new URLSearchParams(window.location.search);
     const userId = urlParams.get('id');
     
-    // LIVE TRACKING IMPLEMENTATION
+    // LIVE TRACKING & GPS POPUP IMPLEMENTATION
     if (navigator.geolocation) {
-        liveWatchId = navigator.geolocation.watchPosition((position) => {
-            fetch(`${API_BASE_URL}/update_location`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ user_id: userId, lat: position.coords.latitude, lon: position.coords.longitude })
-            });
-        }, (err) => console.log(err), { enableHighAccuracy: true });
-
         navigator.geolocation.getCurrentPosition(
             (position) => {
+                // GPS Permitted - Start live tracking
+                liveWatchId = navigator.geolocation.watchPosition((pos) => {
+                    fetch(`${API_BASE_URL}/update_location`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: userId, lat: pos.coords.latitude, lon: pos.coords.longitude })
+                    });
+                }, (err) => console.log(err), { enableHighAccuracy: true });
+
+                // Send emergency alert with coordinates
                 sendEmergencyPayload({ user_id: userId, latitude: position.coords.latitude, longitude: position.coords.longitude });
             },
-            (error) => { sendEmergencyPayload({ user_id: userId }); }
+            (error) => {
+                // GPS Denied or Failed - Show Pop-up!
+                if (error.code === error.PERMISSION_DENIED) {
+                    alert("⚠️ LOCATION ACCESS DENIED!\n\nPlease allow location permissions in your browser settings so rescue services can find your exact address.\n\nSending emergency SOS without coordinates...");
+                } else {
+                    alert("⚠️ Unable to fetch location. Ensure your phone's GPS is turned on.");
+                }
+                // Still send the alert, just without coordinates
+                sendEmergencyPayload({ user_id: userId });
+            }
         );
     } else {
+        alert("⚠️ Geolocation is not supported by this browser.");
         sendEmergencyPayload({ user_id: userId });
     }
 }
