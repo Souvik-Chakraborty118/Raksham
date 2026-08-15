@@ -44,7 +44,7 @@ class UpdateUser(BaseModel):
     phone: str; em1: str; em2: str; em3: str; em4: str; em5: str; em6: str
 
 class EmergencyPayload(BaseModel):
-    user_id: str
+    user_id: str = None
     latitude: float = None
     longitude: float = None
 
@@ -62,7 +62,6 @@ live_locations = {}
 # --- ADVANCED MAP SCRAPING ---
 def fetch_facility(tag_key, tag_value, lat, lon):
     overpass_url = "http://overpass-api.de/api/interpreter"
-    # Increased radius to 8000 meters (8km) for better coverage
     query = f"""
     [out:json];
     nwr["{tag_key}"="{tag_value}"](around:8000,{lat},{lon});
@@ -90,8 +89,7 @@ def fetch_facility(tag_key, tag_value, lat, lon):
     except Exception as e:
         pass
         
-    # --- ROBUST GOOGLE MAPS FALLBACK ---
-    # If the map server blocks Render's IP, give the user a direct Google Maps link!
+    # --- GOOGLE MAPS FALLBACK ---
     formatted_type = tag_value.replace('_', ' ').title()
     maps_link = f"https://www.google.com/maps/search/{tag_value}+near+{lat},{lon}"
     
@@ -99,6 +97,16 @@ def fetch_facility(tag_key, tag_value, lat, lon):
         "html": f"<span style='color:#333; font-weight:bold;'>Nearest {formatted_type}</span><br>📍 <a href='{maps_link}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Open in Google Maps 🗺️</a>",
         "name": f"Nearest {formatted_type}",
         "phone": None
+    }
+
+def find_nearest_services(lat, lon):
+    if not lat or not lon:
+        return {k: {"html": "GPS disabled. Please allow location.", "name": "Unknown", "phone": None} for k in ["hospital", "police_station", "ambulance"]}
+    
+    return {
+        "hospital": fetch_facility("amenity", "hospital", lat, lon),
+        "police_station": fetch_facility("amenity", "police", lat, lon),
+        "ambulance": fetch_facility("emergency", "ambulance_station", lat, lon)
     }
 
 # --- SMS TO EMERGENCY CONTACTS ONLY ---
@@ -202,29 +210,28 @@ async def get_public_profile(user_id: str):
     if user: return dict(user)
     return {"error": "User not found"}
 
-recent_requests = {}
-
 @app.post("/trigger_emergency")
 async def trigger_emergency(request: Request, payload: EmergencyPayload, background_tasks: BackgroundTasks):
-    # The 60-second rate limiter has been completely removed.
-    # The server will now fetch and return the nearest location details every single time you click.
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s', (payload.user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    
-    contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']] if row else []
-    
-    # Scrapes the map using the GPS coordinates sent from the frontend
+    contacts = []
+    try:
+        if payload.user_id and payload.user_id != "null":
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s', (payload.user_id,))
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                contacts = [c for c in [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']] if c]
+    except Exception as e:
+        print(f"DB Error or Test Mode: {e}")
+        
     services = find_nearest_services(payload.latitude, payload.longitude)
 
-    # Trigger background SMS strictly to emergency contacts
-    background_tasks.add_task(process_emergency_alerts, contacts, services, payload.latitude, payload.longitude, payload.user_id)
+    if contacts:
+        background_tasks.add_task(process_emergency_alerts, contacts, services, payload.latitude, payload.longitude, payload.user_id)
 
     return {"status": "success", "services": services}
-    
+
 @app.post("/update_location")
 async def update_location(payload: dict):
     user_id = payload.get("user_id")
@@ -232,16 +239,21 @@ async def update_location(payload: dict):
         live_locations[user_id] = {"lat": payload.get("lat"), "lon": payload.get("lon"), "time": time.time()}
     return {"status": "success"}
 
+@app.get("/get_location/{user_id}")
+async def get_location(user_id: str):
+    loc = live_locations.get(user_id)
+    if loc:
+        return {"status": "success", "data": loc}
+    return {"status": "error", "message": "Waiting for GPS."}
+
 @app.post("/alert_authorities")
 async def alert_authorities(payload: dict):
-    # This exclusively fires when the RED BUTTON is pressed
     services = payload.get("services", {})
     phones = []
     for key in ["hospital", "police_station", "ambulance"]:
         if services.get(key) and services[key].get("phone"):
             phones.append(services[key]["phone"])
             
-    # Clean phone numbers for API
     valid_phones = ["".join(c for c in p if c.isdigit() or c == '+') for p in phones if len(p) >= 5]
     
     if not valid_phones:
@@ -260,7 +272,6 @@ async def alert_authorities(payload: dict):
 
 @app.post("/ai_triage")
 async def ai_triage(payload: TriagePayload):
-    incident_type = payload.type
     dispatched = payload.services
     
     guidance = [
@@ -290,7 +301,7 @@ async def chat(data: dict):
     
     headers = {"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"}
     payload = {
-        "model": "llama-3.1-8b-instant", # <-- UPDATED TO THE LATEST SUPPORTED GROQ MODEL
+        "model": "llama-3.1-8b-instant",
         "messages": [
             {"role": "system", "content": "You are Raksham AI. Give extremely concise, life-saving first-aid advice in 2 sentences max."},
             {"role": "user", "content": data.get("message", "")}
