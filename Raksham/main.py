@@ -68,7 +68,7 @@ def fetch_facility(tag_key, tag_value, lat, lon):
     out center;
     """
     try:
-        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/3.2"}, timeout=5)
+        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/3.3"}, timeout=5)
         elements = response.json().get('elements', [])
         if elements:
             # Sort all nearby places by exact distance
@@ -79,18 +79,13 @@ def fetch_facility(tag_key, tag_value, lat, lon):
             
             elements.sort(key=calc_dist)
             
-            # 1. Keep the absolute closest place for the Name and Address
             closest_facility = elements[0]
             tags = closest_facility.get('tags', {})
-            name = tags.get('name', f'Unnamed {tag_value.replace("_", " ").title()}')
             
-            addr_full = tags.get('addr:full', '')
-            street = tags.get('addr:street', '')
-            city = tags.get('addr:city', '')
-            address = addr_full if addr_full else ", ".join([p for p in [street, city] if p])
-            if not address: address = "Address Not Listed"
+            # STRICTLY Get Name Only
+            name = tags.get('name', f'Unnamed {tag_value.replace("_", " ").title()}')
 
-            # 2. Scan the source data for the nearest recorded local phone number
+            # Scan for nearest recorded local phone number
             closest_phone = None
             for el in elements:
                 el_tags = el.get('tags', {})
@@ -101,24 +96,22 @@ def fetch_facility(tag_key, tag_value, lat, lon):
                     
             display_phone = closest_phone if closest_phone else 'Phone Not Listed'
                 
+            # Returning ONLY the closest name and phone number
             return {
-                "html": f"<span style='color:#333; font-weight:bold;'>{name}</span><br>📍 {address}<br>📞 <a href='tel:{display_phone}' style='color:#FF003C;'>{display_phone}</a>",
+                "html": f"<span style='color:#333; font-weight:bold; font-size:18px;'>{name}</span><br>📞 <a href='tel:{display_phone}' style='color:#FF003C;'>{display_phone}</a>",
                 "name": name,
                 "phone": closest_phone
             }
     except Exception as e:
         pass
         
-    # --- GOOGLE MAPS FALLBACK ---
+    # No Google Map link fallback. Just pure text.
     formatted_type = tag_value.replace('_', ' ').title()
-    maps_link = f"https://www.google.com/maps/search/{tag_value}+near+{lat},{lon}"
-    
     return {
-        "html": f"<span style='color:#333; font-weight:bold;'>Nearest {formatted_type}</span><br>📍 <a href='{maps_link}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Open in Google Maps 🗺️</a>",
+        "html": f"<span style='color:#888; font-weight:bold;'>Nearest {formatted_type} Data Unavailable</span>",
         "name": f"Nearest {formatted_type}",
         "phone": None
     }
-
 def find_nearest_services(lat, lon):
     if not lat or not lon:
         return {k: {"html": "GPS disabled. Please allow location.", "name": "Unknown", "phone": None} for k in ["hospital", "police_station", "ambulance"]}
