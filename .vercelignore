@@ -4,3 +4,4 @@ models/
 raksham.db
 run.bat
 __pycache__/
+requirements.txt
