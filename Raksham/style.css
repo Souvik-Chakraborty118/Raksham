@@ -308,3 +308,22 @@ body {
 hr {
     border: 1px solid rgba(255, 0, 60, 0.15);
 }
+/* Shining Logo Effect */
+.raksham-logo {
+    width: 130px;
+    height: auto;
+    display: block;
+    margin: 0 auto 15px auto; /* Centers the image and adds space below */
+    border-radius: 12px;
+    animation: logoShine 1.5s infinite alternate ease-in-out;
+}
+@keyframes logoShine {
+    0% { 
+        filter: drop-shadow(0px 0px 5px rgba(255, 0, 60, 0.4)) brightness(1); 
+        transform: scale(1);
+    }
+    100% { 
+        filter: drop-shadow(0px 0px 25px rgba(255, 0, 60, 1)) brightness(1.15); 
+        transform: scale(1.02);
+    }
+}
