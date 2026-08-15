@@ -154,8 +154,9 @@ async function sendTriage(type) {
                     <em style="color:#888;">Raksham AI Assistant: Ask me anything regarding first-aid.</em><br>
                 </div>
                 <div style="display:flex; gap:5px;">
-                    <input type="text" id="chat-input" placeholder="Type a medical question..." style="width:75%; padding:10px; border:1px solid #ccc; border-radius:5px;">
-                    <button onclick="sendChatMessage()" style="width:25%; padding:10px; background:#FF003C; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">ASK</button>
+                    <button onclick="startVoiceRecognition()" id="mic-btn" style="padding:10px; background:#333; color:white; border:none; border-radius:5px; cursor:pointer; font-size:16px;" title="Tap to Speak">🎤</button>
+                    <input type="text" id="chat-input" placeholder="Type or speak..." style="width:65%; padding:10px; border:1px solid #ccc; border-radius:5px;">
+                    <button onclick="sendChatMessage()" style="width:20%; padding:10px; background:#FF003C; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">ASK</button>
                 </div>
             </div>
         `;
@@ -198,9 +199,51 @@ async function sendChatMessage() {
         let data = await res.json();
         log.innerHTML += `<div style="margin-top:8px;"><strong style='color:#FF003C;'>AI:</strong> ${data.reply}</div>`;
         log.scrollTop = log.scrollHeight;
+        
+        // AUTO-READ THE AI RESPONSE ALOUD
+        let cleanText = data.reply.replace(/<[^>]*>?/gm, ' ');
+        let utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.rate = 1.0; 
+        window.speechSynthesis.speak(utterance);
+        
     } catch(e) {
         log.innerHTML += `<div style="margin-top:8px;"><strong style='color:#FF003C;'>AI:</strong> Network error. Cannot reach servers.</div>`;
     }
+}
+
+// SPEECH TO TEXT ENGINE
+function startVoiceRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Voice recognition is not supported in this browser.");
+        return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    
+    document.getElementById('mic-btn').style.background = '#FF003C';
+    document.getElementById('chat-input').placeholder = "Listening...";
+    
+    recognition.onresult = function(event) {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('chat-input').value = transcript;
+        document.getElementById('mic-btn').style.background = '#333';
+        document.getElementById('chat-input').placeholder = "Type or speak...";
+        sendChatMessage(); // Auto-send the voice note to AI
+    };
+    
+    recognition.onerror = function() {
+        document.getElementById('mic-btn').style.background = '#333';
+        document.getElementById('chat-input').placeholder = "Type or speak...";
+    };
+    
+    recognition.onend = function() {
+        document.getElementById('mic-btn').style.background = '#333';
+        document.getElementById('chat-input').placeholder = "Type or speak...";
+    };
+    
+    recognition.start();
 }
 
 function readAloud() {
