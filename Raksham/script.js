@@ -3,6 +3,7 @@ let timeLeft = 10;
 let isEditMode = false;
 let dispatchedServices = {}; 
 let liveWatchId = null;
+let emergencyPromise = null; // NEW: Tracks GPS state to prevent "N/A" bug
 
 const API_BASE_URL = 'https://raksham-backend.onrender.com';
 
@@ -75,37 +76,37 @@ async function triggerBackendAlert() {
     const urlParams = new URLSearchParams(window.location.search);
     const userId = urlParams.get('id');
     
-    // LIVE TRACKING & GPS POPUP IMPLEMENTATION
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                // GPS Permitted - Start live tracking
-                liveWatchId = navigator.geolocation.watchPosition((pos) => {
-                    fetch(`${API_BASE_URL}/update_location`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ user_id: userId, lat: pos.coords.latitude, lon: pos.coords.longitude })
-                    });
-                }, (err) => console.log(err), { enableHighAccuracy: true });
+    // Create a promise that strictly waits for GPS to resolve
+    emergencyPromise = new Promise((resolve) => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    // GPS Permitted - Start live tracking
+                    liveWatchId = navigator.geolocation.watchPosition((pos) => {
+                        fetch(`${API_BASE_URL}/update_location`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ user_id: userId, lat: pos.coords.latitude, lon: pos.coords.longitude })
+                        });
+                    }, (err) => console.log(err), { enableHighAccuracy: true });
 
-                // Send emergency alert with coordinates
-                sendEmergencyPayload({ user_id: userId, latitude: position.coords.latitude, longitude: position.coords.longitude });
-            },
-            (error) => {
-                // GPS Denied or Failed - Show Pop-up!
-                if (error.code === error.PERMISSION_DENIED) {
-                    alert("⚠️ LOCATION ACCESS DENIED!\n\nPlease allow location permissions in your browser settings so rescue services can find your exact address.\n\nSending emergency SOS without coordinates...");
-                } else {
-                    alert("⚠️ Unable to fetch location. Ensure your phone's GPS is turned on.");
-                }
-                // Still send the alert, just without coordinates
-                sendEmergencyPayload({ user_id: userId });
-            }
-        );
-    } else {
-        alert("⚠️ Geolocation is not supported by this browser.");
-        sendEmergencyPayload({ user_id: userId });
-    }
+                    await sendEmergencyPayload({ user_id: userId, latitude: position.coords.latitude, longitude: position.coords.longitude });
+                    resolve();
+                },
+                async (error) => {
+                    // Location denied pop-up trigger
+                    if (error.code === error.PERMISSION_DENIED) {
+                        alert("⚠️ LOCATION ACCESS DENIED!\n\nPlease allow location permissions so rescue services can find you.\n\nSending emergency SOS without coordinates...");
+                    }
+                    await sendEmergencyPayload({ user_id: userId });
+                    resolve();
+                },
+                { timeout: 10000 } // Don't wait forever for GPS
+            );
+        } else {
+            sendEmergencyPayload({ user_id: userId }).then(resolve);
+        }
+    });
 }
 
 async function sendEmergencyPayload(payload) {
@@ -127,7 +128,14 @@ async function sendEmergencyPayload(payload) {
 async function sendTriage(type) {
     document.getElementById('triage-screen').classList.add('hidden');
     document.getElementById('guidance-screen').classList.remove('hidden');
-    document.getElementById('ai-suggestions').innerHTML = "Scraping map data and contacting services...";
+    
+    // Show a loading text so the user knows it's working
+    document.getElementById('ai-suggestions').innerHTML = "<h3 style='color:#FF003C;'>Connecting to satellites and dispatching services...</h3><p>Please wait up to 5 seconds for GPS to lock on.</p>";
+    
+    // WAIT for the GPS and backend map scraping to finish before loading the UI
+    if (emergencyPromise) {
+        await emergencyPromise;
+    }
     
     try {
         let response = await fetch(`${API_BASE_URL}/ai_triage`, {
@@ -139,7 +147,6 @@ async function sendTriage(type) {
         
         let formattedText = Array.isArray(data.suggestions) ? data.suggestions.join('<br><br>') : data.suggestions;
         
-        // Inject map data, Red Button, TTS Button, and Chatbot UI dynamically
         document.getElementById('ai-suggestions').innerHTML = `
             ${formattedText}
             <br><br>
@@ -162,7 +169,6 @@ async function sendTriage(type) {
     }
 }
 
-// RED BUTTON LOGIC
 async function alertAuthorities() {
     alert("Dispatching coordinates to local authorities. Please hold.");
     try {
@@ -178,7 +184,6 @@ async function alertAuthorities() {
     }
 }
 
-// GROQ CHATBOT LOGIC
 async function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const log = document.getElementById('chat-log');
@@ -199,23 +204,20 @@ async function sendChatMessage() {
         log.innerHTML += `<div style="margin-top:8px;"><strong style='color:#FF003C;'>AI:</strong> ${data.reply}</div>`;
         log.scrollTop = log.scrollHeight;
     } catch(e) {
-        log.innerHTML += `<div style="margin-top:8px;"><strong style='color:#FF003C;'>AI:</strong> Network error. Cannot reach Groq servers.</div>`;
+        log.innerHTML += `<div style="margin-top:8px;"><strong style='color:#FF003C;'>AI:</strong> Network error. Cannot reach servers.</div>`;
     }
 }
 
-// TEXT TO SPEECH LOGIC
 function readAloud() {
     let rawHtml = document.getElementById('ai-suggestions').innerHTML;
-    // Strip HTML tags for clean reading
     let cleanText = rawHtml.replace(/<[^>]*>?/gm, ' ');
     cleanText = cleanText.replace(/READ ALOUD/g, '').replace(/ALERT NEAREST AUTHORITIES/g, '').replace(/Raksham AI Assistant.*/g, '');
     
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = 0.9; // Slightly slower for clarity during emergencies
+    utterance.rate = 0.9; 
     window.speechSynthesis.speak(utterance);
 }
 
-// AUTH & REGISTRATION LOGIC
 async function registerUser() {
     const userData = {
         email: document.getElementById('email').value, password: document.getElementById('password').value,
