@@ -3,7 +3,7 @@ let timeLeft = 10;
 let isEditMode = false;
 let dispatchedServices = {}; 
 let liveWatchId = null;
-let emergencyPromise = null; // NEW: Tracks GPS state to prevent "N/A" bug
+let emergencyPromise = null; 
 
 const API_BASE_URL = 'https://raksham-backend.onrender.com';
 
@@ -76,12 +76,10 @@ async function triggerBackendAlert() {
     const urlParams = new URLSearchParams(window.location.search);
     const userId = urlParams.get('id');
     
-    // Create a promise that strictly waits for GPS to resolve
     emergencyPromise = new Promise((resolve) => {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
-                    // GPS Permitted - Start live tracking
                     liveWatchId = navigator.geolocation.watchPosition((pos) => {
                         fetch(`${API_BASE_URL}/update_location`, {
                             method: 'POST',
@@ -94,14 +92,13 @@ async function triggerBackendAlert() {
                     resolve();
                 },
                 async (error) => {
-                    // Location denied pop-up trigger
                     if (error.code === error.PERMISSION_DENIED) {
-                        alert("⚠️ LOCATION ACCESS DENIED!\n\nPlease allow location permissions so rescue services can find you.\n\nSending emergency SOS without coordinates...");
+                        alert("⚠️ LOCATION ACCESS DENIED!\n\nPlease allow location permissions so rescue services can find you.");
                     }
                     await sendEmergencyPayload({ user_id: userId });
                     resolve();
                 },
-                { timeout: 10000 } // Don't wait forever for GPS
+                { timeout: 10000 } 
             );
         } else {
             sendEmergencyPayload({ user_id: userId }).then(resolve);
@@ -126,16 +123,16 @@ async function sendEmergencyPayload(payload) {
 }
 
 async function sendTriage(type) {
+    if (!emergencyPromise) {
+        clearInterval(countdownTimer);
+        triggerBackendAlert(); 
+    }
+
     document.getElementById('triage-screen').classList.add('hidden');
     document.getElementById('guidance-screen').classList.remove('hidden');
-    
-    // Show a loading text so the user knows it's working
     document.getElementById('ai-suggestions').innerHTML = "<h3 style='color:#FF003C;'>Connecting to satellites and dispatching services...</h3><p>Please wait up to 5 seconds for GPS to lock on.</p>";
     
-    // WAIT for the GPS and backend map scraping to finish before loading the UI
-    if (emergencyPromise) {
-        await emergencyPromise;
-    }
+    await emergencyPromise;
     
     try {
         let response = await fetch(`${API_BASE_URL}/ai_triage`, {
@@ -151,9 +148,7 @@ async function sendTriage(type) {
             ${formattedText}
             <br><br>
             <button onclick="readAloud()" style="background:#000; color:#fff; padding:12px; border:none; width:100%; border-radius:8px; margin-bottom:15px; font-weight:bold; font-size:14px; cursor:pointer;">🔊 READ ALOUD</button>
-            
             <button onclick="alertAuthorities()" style="background:#FF003C; color:#fff; padding:15px; border:none; width:100%; border-radius:8px; font-weight:900; font-size:16px; cursor:pointer; box-shadow: 0px 4px 10px rgba(255,0,60,0.4);">🚨 ALERT NEAREST AUTHORITIES</button>
-            
             <div id="chat-container" style="margin-top:25px; border:2px solid #eee; border-radius:8px; padding:10px; background:#fff;">
                 <div id="chat-log" style="height:150px; overflow-y:auto; font-size:14px; margin-bottom:10px; padding:5px; text-align:left;">
                     <em style="color:#888;">Raksham AI Assistant: Ask me anything regarding first-aid.</em><br>
