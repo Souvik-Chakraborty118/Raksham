@@ -165,21 +165,6 @@ async function sendTriage(type) {
     }
 }
 
-async function alertAuthorities() {
-    alert("Dispatching coordinates to local authorities. Please hold.");
-    try {
-        let res = await fetch(`${API_BASE_URL}/alert_authorities`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({services: dispatchedServices})
-        });
-        let data = await res.json();
-        alert(data.message);
-    } catch (e) {
-        alert("Failed to connect to local dispatch.");
-    }
-}
-
 async function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const log = document.getElementById('chat-log');
@@ -194,13 +179,13 @@ async function sendChatMessage() {
         let res = await fetch(`${API_BASE_URL}/chat`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({message: msg})
+            // ADDED: Passing the dispatchedServices variable to the backend
+            body: JSON.stringify({ message: msg, services: dispatchedServices })
         });
         let data = await res.json();
         log.innerHTML += `<div style="margin-top:8px;"><strong style='color:#FF003C;'>AI:</strong> ${data.reply}</div>`;
         log.scrollTop = log.scrollHeight;
         
-        // AUTO-READ THE AI RESPONSE ALOUD
         let cleanText = data.reply.replace(/<[^>]*>?/gm, ' ');
         let utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.rate = 1.0; 
