@@ -62,14 +62,14 @@ live_locations = {}
 # --- ADVANCED MAP SCRAPING ---
 def fetch_facility(tag_key, tag_value, lat, lon):
     overpass_url = "http://overpass-api.de/api/interpreter"
-    # Using 'nwr' (nodes, ways, relations) and 'out center' catches full building polygons
+    # Increased radius to 8000 meters (8km) for better coverage
     query = f"""
     [out:json];
-    nwr["{tag_key}"="{tag_value}"](around:5000,{lat},{lon});
+    nwr["{tag_key}"="{tag_value}"](around:8000,{lat},{lon});
     out center 1;
     """
     try:
-        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/2.0"}, timeout=5)
+        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/3.0"}, timeout=5)
         elements = response.json().get('elements', [])
         if elements:
             tags = elements[0].get('tags', {})
@@ -90,16 +90,15 @@ def fetch_facility(tag_key, tag_value, lat, lon):
     except Exception as e:
         pass
         
-    return {"html": f"No {tag_value.replace('_', ' ')} found nearby.", "name": "Unknown", "phone": None}
-
-def find_nearest_services(lat, lon):
-    if not lat or not lon:
-        return {k: {"html": "GPS disabled. Please allow location.", "name": "Unknown", "phone": None} for k in ["hospital", "police_station", "ambulance"]}
+    # --- ROBUST GOOGLE MAPS FALLBACK ---
+    # If the map server blocks Render's IP, give the user a direct Google Maps link!
+    formatted_type = tag_value.replace('_', ' ').title()
+    maps_link = f"https://www.google.com/maps/search/{tag_value}+near+{lat},{lon}"
     
     return {
-        "hospital": fetch_facility("amenity", "hospital", lat, lon),
-        "police_station": fetch_facility("amenity", "police", lat, lon),
-        "ambulance": fetch_facility("emergency", "ambulance_station", lat, lon)
+        "html": f"<span style='color:#333; font-weight:bold;'>Nearest {formatted_type}</span><br>📍 <a href='{maps_link}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Open in Google Maps 🗺️</a>",
+        "name": f"Nearest {formatted_type}",
+        "phone": None
     }
 
 # --- SMS TO EMERGENCY CONTACTS ONLY ---
