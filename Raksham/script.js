@@ -175,9 +175,11 @@ async function sendTriage(emergencyType) {
         // FORCE BROWSER TO WAIT FOR GPS PERMISSION
         const position = await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true, timeout: 10000 
-            });
+            enableHighAccuracy: true, 
+            timeout: 20000, // Increased to 20 seconds
+            maximumAge: 0
         });
+    });
         lat = position.coords.latitude;
         lon = position.coords.longitude;
     } catch (error) {
