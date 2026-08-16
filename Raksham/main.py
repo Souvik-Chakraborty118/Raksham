@@ -9,6 +9,10 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from psycopg2.extras import RealDictCursor
+import hashlib
+
+def hash_password(password: str):
+    return hashlib.sha256(password.encode()).hexdigest()
 
 app = FastAPI()
 
@@ -191,10 +195,13 @@ async def register(user: NewUser):
         user_id = str(uuid.uuid4())
         qr_link = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://raksham-pi.vercel.app/profile.html?id={user_id}"
         
+        clean_email = user.email.strip().lower()
+        hashed_password = hash_password(user.password.strip()) # <-- WE HASH IT BEFORE SAVING
+        
         cursor.execute('''
             INSERT INTO users (user_id, email, password, name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6, qr_image)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (user_id, user.email, user.password, user.name, user.blood_group, user.allergies, user.conditions, user.phone, user.em1, user.em2, user.em3, user.em4, user.em5, user.em6, qr_link))
+        ''', (user_id, clean_email, hashed_password, user.name, user.blood_group, user.allergies, user.conditions, user.phone, user.em1, user.em2, user.em3, user.em4, user.em5, user.em6, qr_link))
         conn.commit()
         cursor.close()
         conn.close()
@@ -207,10 +214,16 @@ async def login(user: LoginUser):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE email = %s AND password = %s", (user.email, user.password))
+        
+        clean_email = user.email.strip().lower()
+        hashed_input = hash_password(user.password.strip()) # <-- WE HASH IT HERE NOW
+        
+        cursor.execute("SELECT * FROM users WHERE LOWER(TRIM(email)) = %s AND password = %s", (clean_email, hashed_input))
         row = cursor.fetchone()
+        
         cursor.close()
         conn.close()
+        
         if row:
             return {"message": "Login successful"}
         return {"error": "Invalid email or password"}
