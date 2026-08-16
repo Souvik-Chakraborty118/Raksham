@@ -92,9 +92,10 @@ async function fetchFacilitiesClientSide(lat, lon) {
         ambulance: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@${lat},${lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: "Ambulance Dispatch", phone: "102" }
     };
 
-    // 1. Fast Overpass Query
-    const query = `[out:json][timeout:5];(nwr["amenity"~"hospital|clinic"](around:1500,${lat},${lon});nwr["healthcare"="hospital"](around:1500,${lat},${lon});nwr["amenity"="police"](around:1500,${lat},${lon}););out center;`;
+    // 1. Fast Overpass Query - 1.5km for Hospitals, 5km for Police (since police stations are spread further apart)
+    const query = `[out:json][timeout:5];(nwr["amenity"~"hospital|clinic"](around:1500,${lat},${lon});nwr["healthcare"="hospital"](around:1500,${lat},${lon});nwr["amenity"="police"](around:5000,${lat},${lon}););out center;`;
     const encodedQuery = encodeURIComponent(query);
+    
     const mirrors = [
         `https://overpass-api.de/api/interpreter?data=${encodedQuery}`,
         `https://overpass.kumi.systems/api/interpreter?data=${encodedQuery}`
@@ -147,13 +148,12 @@ async function fetchFacilitiesClientSide(lat, lon) {
         }
     }
 
-    // 2. STRICTLY BOUNDED BACKUP API
-    if (!overpassSuccess || services.hospital.name === "Emergency Hospital") {
+    // 2. INDEPENDENT BACKUP APIS (These act individually if either map fails)
+    
+    // Backup for Hospital (Strict 1.5km limit)
+    if (services.hospital.name === "Emergency Hospital") {
         try {
-            // ~1.5km search box to prevent searching far away
             let viewBox = `${lon-0.015},${lat+0.015},${lon+0.015},${lat-0.015}`;
-            
-            // Backup fetch for Hospital
             let nomResHosp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=hospital&viewbox=${viewBox}&bounded=1&limit=3`);
             let nomDataHosp = await nomResHosp.json();
             
@@ -161,7 +161,6 @@ async function fetchFacilitiesClientSide(lat, lon) {
                 let bestNom = nomDataHosp[0];
                 let hLat = parseFloat(bestNom.lat);
                 let hLon = parseFloat(bestNom.lon);
-                
                 let rawName = bestNom.name || bestNom.display_name.split(',')[0];
                 let hName = rawName.replace(/(Hospital|Clinic).*$/i, '$1').trim(); 
                 if(hName.length < 3) hName = rawName;
@@ -174,9 +173,14 @@ async function fetchFacilitiesClientSide(lat, lon) {
                     phone: "112"
                 };
             }
+        } catch(e) { console.warn("Hospital Backup API failed"); }
+    }
 
-            // 👇 THE FIX: Backup fetch for Police Station 👇
-            let nomResPol = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=police&viewbox=${viewBox}&bounded=1&limit=3`);
+    // Backup for Police Station (5km limit because stations are further apart)
+    if (services.police_station.name === "Local Police") {
+        try {
+            let viewBoxPol = `${lon-0.05},${lat+0.05},${lon+0.05},${lat-0.05}`;
+            let nomResPol = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=police+station&viewbox=${viewBoxPol}&bounded=1&limit=3`);
             let nomDataPol = await nomResPol.json();
 
             if (nomDataPol && nomDataPol.length > 0) {
@@ -184,7 +188,10 @@ async function fetchFacilitiesClientSide(lat, lon) {
                 let pLat = parseFloat(bestPol.lat);
                 let pLon = parseFloat(bestPol.lon);
                 
-                let pName = bestPol.name || bestPol.display_name.split(',')[0];
+                let rawName = bestPol.name || bestPol.display_name.split(',')[0];
+                let pName = rawName.replace(/(Police Station).*$/i, '$1').trim(); 
+                if(pName.length < 3) pName = rawName;
+                
                 let pDist = calculateDistance(lat, lon, pLat, pLon);
                 
                 services.police_station = {
@@ -193,7 +200,7 @@ async function fetchFacilitiesClientSide(lat, lon) {
                     phone: "100"
                 };
             }
-        } catch(e) { console.warn("Backup API failed"); }
+        } catch(e) { console.warn("Police Backup API failed"); }
     }
 
     return services;
@@ -235,7 +242,7 @@ async function sendTriage(emergencyType) {
         lat = position.coords.latitude; lon = position.coords.longitude;
     } catch (error) { console.warn("GPS Failed"); }
 
-    const urlParams = new URLSearchParams(window.location.search);
+    const urlParams = newSearchParams(window.location.search);
     const userId = urlParams.get('id') || "unknown_scan";
 
     if (lat) {
