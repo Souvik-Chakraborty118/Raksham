@@ -1,564 +1,349 @@
-// =========================================================
-// RAKSHAM APP - MAIN JAVASCRIPT
-// =========================================================
-
-// ⚠️ IMPORTANT: Replace with your actual Render backend URL
 const API_BASE_URL = "https://raksham-backend.onrender.com";
 
-// Determine which page the user is currently on
 const isProfilePage = window.location.pathname.includes('profile.html');
 const isIndexPage = window.location.pathname.includes('index.html') || window.location.pathname === '/' || window.location.pathname === '';
 
-// =========================================================
-// 1. DATA LOADER (Handles both QR Scanners & Owners)
-// =========================================================
 async function fetchAndDisplayData() {
     const urlParams = new URLSearchParams(window.location.search);
     const emergencyId = urlParams.get('id');
     const userEmail = localStorage.getItem('raksham_user_email');
 
-    // 🚨 SCANNED BY STRANGER (Index Page with ?id=...)
     if (isIndexPage && emergencyId) {
         try {
             let response = await fetch(`${API_BASE_URL}/profile/${emergencyId}`);
             let data = await response.json();
-            if (!data.error) {
-                populateIndexDOM(data);
-            } else {
-                console.warn("Emergency profile not found.");
-            }
-        } catch (error) {
-            console.error("Error fetching public profile:", error);
-        }
+            if (!data.error) populateIndexDOM(data);
+        } catch (error) { console.error(error); }
     } 
-    // 👤 OWNER LOGGED IN (Profile Page)
     else if (isProfilePage && userEmail) {
         try {
             let response = await fetch(`${API_BASE_URL}/retrieve_profile_data`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: userEmail })
             });
             let data = await response.json();
-            
             if (!data.error) {
                 populateProfileDOM(data.user_data);
-                
-                // Show QR Code and Download Button
                 const qrImg = document.getElementById('qr-image');
                 const dlLink = document.getElementById('download-link');
                 const dlBtn = document.getElementById('download-btn');
-                
                 if (qrImg && data.qr_image) {
-                    qrImg.src = data.qr_image;
-                    qrImg.style.display = 'block';
-                    dlLink.href = data.qr_image;
-                    dlBtn.style.display = 'inline-block';
+                    qrImg.src = data.qr_image; qrImg.style.display = 'block';
+                    dlLink.href = data.qr_image; dlBtn.style.display = 'inline-block';
                 }
-            } else {
-                window.location.href = 'login.html'; // Invalid data, kick to login
-            }
-        } catch (error) {
-            console.error("Error fetching private profile:", error);
-        }
-    } 
-    // 👤 UNAUTHENTICATED ON PROFILE PAGE -> KICK TO LOGIN
-    else if (isProfilePage && !userEmail) {
-        window.location.href = 'login.html';
-    }
+            } else window.location.href = 'login.html';
+        } catch (error) { console.error(error); }
+    } else if (isProfilePage && !userEmail) window.location.href = 'login.html';
 }
 
-// --- FILLS DATA ON INDEX.HTML (Public View) ---
 function populateIndexDOM(data) {
     const setText = (id, text) => { if (document.getElementById(id)) document.getElementById(id).innerText = text || "N/A"; };
-    
-    setText('profile-name', data.name);
-    setText('profile-blood', data.blood_group);
-    setText('profile-allergies', data.allergies);
-    setText('profile-conditions', data.conditions);
-    setText('profile-phone', data.phone);
+    setText('profile-name', data.name); setText('profile-blood', data.blood_group);
+    setText('profile-allergies', data.allergies); setText('profile-conditions', data.conditions); setText('profile-phone', data.phone);
 
-    // Make Emergency Contacts clickable
     const setLink = (id, phone) => {
         const el = document.getElementById(id);
-        if (el && phone) {
-            el.innerHTML = `<a href="tel:${phone}" style="color:#FF003C; font-weight:bold;">${phone}</a>`;
-        }
+        if (el && phone) el.innerHTML = `<a href="tel:${phone}" style="color:#FF003C; font-weight:bold;">${phone}</a>`;
     };
-    setLink('profile-em1', data.em1);
-    setLink('profile-em2', data.em2);
-    setLink('profile-em3', data.em3);
-    setLink('profile-em4', data.em4);
-    setLink('profile-em5', data.em5);
-    setLink('profile-em6', data.em6);
+    setLink('profile-em1', data.em1); setLink('profile-em2', data.em2); setLink('profile-em3', data.em3);
+    setLink('profile-em4', data.em4); setLink('profile-em5', data.em5); setLink('profile-em6', data.em6);
 
-    // 🔧 NEW: show AI-summarized medical history if present and not hidden by the user
     const summaryEl = document.getElementById('profile-medical-summary');
     const summaryBox = document.getElementById('medical-history-box');
     if (summaryEl) {
         if (data.medical_summary) {
             summaryEl.innerText = data.medical_summary;
             if (summaryBox) summaryBox.style.display = 'block';
-        } else if (summaryBox) {
-            summaryBox.style.display = 'none';
-        }
+        } else if (summaryBox) summaryBox.style.display = 'none';
     }
 }
 
-// --- FILLS DATA ON PROFILE.HTML (Owner View) ---
 function populateProfileDOM(data) {
     const setText = (id, text) => { if (document.getElementById(id)) document.getElementById(id).innerText = text || "N/A"; };
     const setInput = (id, text) => { if (document.getElementById(id)) document.getElementById(id).value = text || ""; };
+    setText('v-email', data.email); setText('v-name', data.name); setText('v-blood', data.blood_group);
+    setText('v-allergies', data.allergies); setText('v-cond', data.conditions); setText('v-phone', data.phone);
+    setText('v-em1', data.em1); setText('v-em2', data.em2); setText('v-em3', data.em3);
+    setText('v-em4', data.em4); setText('v-em5', data.em5); setText('v-em6', data.em6);
 
-    // Fill Display Data
-    setText('v-email', data.email);
-    setText('v-name', data.name);
-    setText('v-blood', data.blood_group);
-    setText('v-allergies', data.allergies);
-    setText('v-cond', data.conditions);
-    setText('v-phone', data.phone);
-    setText('v-em1', data.em1);
-    setText('v-em2', data.em2);
-    setText('v-em3', data.em3);
-    setText('v-em4', data.em4);
-    setText('v-em5', data.em5);
-    setText('v-em6', data.em6);
-
-    // Pre-fill Edit Menu
-    setInput('e-email', data.email);
-    setInput('e-name', data.name);
-    setInput('e-blood', data.blood_group);
-    setInput('e-allergies', data.allergies);
-    setInput('e-cond', data.conditions);
-    setInput('e-phone', data.phone);
-    setInput('e-em1', data.em1);
-    setInput('e-em2', data.em2);
-    setInput('e-em3', data.em3);
-    setInput('e-em4', data.em4);
-    setInput('e-em5', data.em5);
-    setInput('e-em6', data.em6);
+    setInput('e-email', data.email); setInput('e-name', data.name); setInput('e-blood', data.blood_group);
+    setInput('e-allergies', data.allergies); setInput('e-cond', data.conditions); setInput('e-phone', data.phone);
+    setInput('e-em1', data.em1); setInput('e-em2', data.em2); setInput('e-em3', data.em3);
+    setInput('e-em4', data.em4); setInput('e-em5', data.em5); setInput('e-em6', data.em6);
 }
 
-// --- VOICE TO TEXT (Listen to User) ---
-function startVoiceRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        alert("Voice input is not supported in this browser. Please type your message.");
-        return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-IN'; // Set to India English (can use en-US too)
-    recognition.interimResults = false;
-    
-    const micBtn = document.getElementById('mic-btn');
-    const originalBg = micBtn.style.background;
-    
-    // Turn button red while recording
-    micBtn.style.background = '#FF003C'; 
-
-    recognition.start();
-
-    recognition.onresult = (event) => {
-        const speechResult = event.results[0][0].transcript;
-        document.getElementById('chat-input').value = speechResult;
-        
-        // Auto-send the message immediately to save time in an emergency
-        sendChatMessage(); 
-    };
-
-    recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
-    };
-
-    recognition.onend = () => {
-        // Revert button color when done
-        micBtn.style.background = originalBg; 
-    };
+// --- CLIENT SIDE MAP SCRAPING ---
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
-// --- TEXT TO VOICE (Read AI Response Aloud) ---
-function speakText(text) {
-    if (!('speechSynthesis' in window)) return;
-    
-    // Stop any current audio before starting a new one
-    window.speechSynthesis.cancel(); 
-    
-    // Strip out HTML tags (like <b> or <br>) and markdown so it sounds natural
-    const cleanText = text.replace(/<\/?[^>]+(>|$)/g, "").replace(/[*_#]/g, "");
-    
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'en-IN'; // Set voice accent
-    utterance.rate = 1.05;    // Speak slightly faster for emergencies
-    
-    window.speechSynthesis.speak(utterance);
+async function fetchFacilitiesClientSide(lat, lon) {
+    let services = {
+        hospital: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Nearest Hospital (Fallback)</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@${lat},${lon},15z' target='_blank'>Get Directions</a>`, name: "Nearest Hospital", phone: "112" },
+        police_station: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Local Police (Fallback)</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/search/police/@${lat},${lon},15z' target='_blank'>Get Directions</a>`, name: "Local Police", phone: "100" },
+        ambulance: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch (Fallback)</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@${lat},${lon},15z' target='_blank'>Get Directions</a>`, name: "Ambulance", phone: "102" }
+    };
+
+    const query = `[out:json][timeout:5];(node["amenity"~"hospital|clinic"](around:15000,${lat},${lon});way["amenity"~"hospital|clinic"](around:15000,${lat},${lon});node["amenity"="police"](around:15000,${lat},${lon});node["amenity"="ambulance_station"](around:15000,${lat},${lon}););out center;`;
+
+    try {
+        let res = await fetch("https://overpass-api.de/api/interpreter", { method: "POST", body: "data=" + encodeURIComponent(query), headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+        let data = await res.json();
+        if (data && data.elements && data.elements.length > 0) {
+            let h_list = [], p_list = [], a_list = [];
+            data.elements.forEach(el => {
+                let el_lat = el.lat || (el.center && el.center.lat);
+                let el_lon = el.lon || (el.center && el.center.lon);
+                if(!el_lat || !el_lon) return;
+                let item = { lat: el_lat, lon: el_lon, dist: calculateDistance(lat, lon, el_lat, el_lon), tags: el.tags || {} };
+                let am = item.tags.amenity || "", hc = item.tags.healthcare || "";
+                if (am.includes("hospital") || am.includes("clinic") || hc.includes("hospital")) h_list.push(item);
+                else if (am.includes("police")) p_list.push(item);
+                else if (am.includes("ambulance")) a_list.push(item);
+            });
+
+            function getBest(arr, defName, defPhone) {
+                if(!arr.length) return null;
+                arr.sort((a, b) => a.dist - b.dist);
+                let best = arr[0], n = best.tags.name || best.tags.operator || defName, p = best.tags.phone || best.tags['contact:phone'] || defPhone;
+                return { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${n}</span><br>📍 Distance: <strong>${best.dist.toFixed(1)} km</strong><br>📞 <a href='tel:${p}' style='color:#FF003C;'>${p}</a><br>🗺️ <a href='https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${best.lat},${best.lon}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: n, phone: p };
+            }
+
+            let h = getBest(h_list, "Nearest Hospital", "112");
+            let p = getBest(p_list, "Nearest Police", "100");
+            let a = getBest(a_list, "Nearest Ambulance", "102");
+
+            if(h) services.hospital = h;
+            if(p) services.police_station = p;
+            if(a) services.ambulance = a;
+        }
+    } catch (e) { console.warn("Overpass frontend fetch failed", e); }
+    return services;
 }
-// =========================================================
-// 2. EMERGENCY TRIGGER SEQUENCE (Index.html Logic)
-// =========================================================
+
 let countdownInterval;
-
 function startCountdown() {
     document.getElementById('main-screen').style.display = 'none';
-    document.getElementById('countdown-screen').classList.remove('hidden');
-    document.getElementById('countdown-screen').style.display = 'block';
-    
-    let timeLeft = 10;
-    document.getElementById('timer-display').innerText = timeLeft;
-    
+    document.getElementById('countdown-screen').classList.remove('hidden'); document.getElementById('countdown-screen').style.display = 'block';
+    let timeLeft = 10; document.getElementById('timer-display').innerText = timeLeft;
     countdownInterval = setInterval(() => {
-        timeLeft--;
-        document.getElementById('timer-display').innerText = timeLeft;
-        
+        timeLeft--; document.getElementById('timer-display').innerText = timeLeft;
         if (timeLeft <= 0) {
             clearInterval(countdownInterval);
             document.getElementById('countdown-screen').style.display = 'none';
-            document.getElementById('triage-screen').classList.remove('hidden');
-            document.getElementById('triage-screen').style.display = 'block';
+            document.getElementById('triage-screen').classList.remove('hidden'); document.getElementById('triage-screen').style.display = 'block';
         }
     }, 1000);
 }
 
 function cancelEmergency() {
     clearInterval(countdownInterval);
-    document.getElementById('countdown-screen').style.display = 'none';
-    document.getElementById('main-screen').style.display = 'block';
+    document.getElementById('countdown-screen').style.display = 'none'; document.getElementById('main-screen').style.display = 'block';
 }
 
 async function sendTriage(emergencyType) {
     document.getElementById('triage-screen').style.display = 'none';
-    document.getElementById('guidance-screen').classList.remove('hidden');
-    document.getElementById('guidance-screen').style.display = 'block';
+    document.getElementById('guidance-screen').classList.remove('hidden'); document.getElementById('guidance-screen').style.display = 'block';
     
-    // 👇 FIX: Reveal the chatbot IMMEDIATELY so it never gets stuck hidden
     const chatBox = document.getElementById('chat-box');
     if (chatBox) chatBox.style.display = 'block';
     
     const outputDiv = document.getElementById('ai-suggestions');
-    outputDiv.innerHTML = "<span style='color:#333;'>Acquiring secure GPS lock... Please click 'Allow' on your browser prompt.</span>";
+    outputDiv.innerHTML = "<span style='color:#333;'>Acquiring secure GPS lock...</span>";
     
-    let lat = null;
-    let lon = null;
-    
+    let lat = null, lon = null;
     try {
-        // FORCE BROWSER TO WAIT FOR GPS PERMISSION
-        const position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true, 
-            timeout: 20000, 
-            maximumAge: 0
-        });
-    });
-        lat = position.coords.latitude;
-        lon = position.coords.longitude;
-
-        // 👇 NEW: Inject GPS link directly into the 112 SMS Button
-        const smsBtn = document.getElementById('sms-112-btn');
-        if (smsBtn) {
-            smsBtn.href = `sms:112?body=URGENT EMERGENCY! Please send help. My exact location: https://maps.google.com/?q=${lat},${lon}`;
-        }
-
-    } catch (error) {
-        console.warn("GPS Failed:", error);
-    }
+        const position = await new Promise((resolve, reject) => { navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }); });
+        lat = position.coords.latitude; lon = position.coords.longitude;
+    } catch (error) { console.warn("GPS Failed"); }
 
     const urlParams = new URLSearchParams(window.location.search);
     const userId = urlParams.get('id') || "unknown_scan";
 
-    try {
-        if (lat) {
-            outputDiv.innerHTML = "<span style='color:green;'>GPS Locked! Waking up dispatch servers...</span>";
-        } else {
-            outputDiv.innerHTML = "<span style='color:red;'>GPS denied. Proceeding with national dispatch...</span>";
+    if (lat) {
+        outputDiv.innerHTML = "<span style='color:green;'>GPS Locked! Fetching nearby hospitals...</span>";
+        
+        // --- CLIENT SIDE MAP FETCH ---
+        let services = await fetchFacilitiesClientSide(lat, lon);
+        window.lastDispatchedServices = services;
+
+        // INJECT THE GREEN AND ORANGE SMS BUTTONS
+        const hospName = services.hospital.name;
+        const hospPhone = services.hospital.phone;
+        const gpsLink = `https://maps.google.com/?q=${lat},${lon}`;
+        
+        const smsActionDiv = document.getElementById('sms-action-buttons');
+        if (smsActionDiv) {
+            smsActionDiv.innerHTML = `
+                <a href="sms:${hospPhone}?body=URGENT EMERGENCY! Please send help to my location: ${gpsLink}" class="btn" style="display:block; text-align:center; background-color:#28a745; color:white; border-radius:12px; margin-bottom: 10px; font-weight:bold; padding: 15px; text-decoration:none; box-shadow: 0 4px 10px rgba(40, 167, 69, 0.4);">
+                    🟢 SMS NEAREST HOSPITAL (${hospName})
+                </a>
+                <a href="sms:112?body=URGENT EMERGENCY! Please send help. My exact location: ${gpsLink}" class="btn" style="display:block; text-align:center; background-color:#ff9800; color:white; border-radius:12px; margin-bottom: 20px; font-weight:bold; padding: 15px; text-decoration:none; box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);">
+                    🚨 SMS 112 DISPATCH
+                </a>
+            `;
         }
 
-        // Trigger SMS and get nearest hospitals
-        let triggerRes = await fetch(`${API_BASE_URL}/trigger_emergency`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId, latitude: lat, longitude: lon })
-        });
+        // TRIGGER BACKEND BACKGROUND SMS AND GET AI SUGGESTIONS
+        fetch(`${API_BASE_URL}/trigger_emergency`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, latitude: lat, longitude: lon, services: services }) });
         
-        // If backend is sleeping/returns 502 HTML, catch it before it breaks the JSON parser
-        if (!triggerRes.ok) throw new Error("Backend waking up or network error");
-        
-        let triggerData = await triggerRes.json();
-        window.lastDispatchedServices = triggerData.services || {};
-
-        // START LIVE GPS TRACKING
         if (navigator.geolocation) {
             navigator.geolocation.watchPosition(async (pos) => {
-                try {
-                    await fetch(`${API_BASE_URL}/update_location`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user_id: userId, lat: pos.coords.latitude, lon: pos.coords.longitude })
-                    });
-                } catch (e) {
-                    console.error("Live tracking update failed", e);
-                }
-            }, (err) => {
-                console.warn("Live tracking lost:", err);
-            }, { enableHighAccuracy: true, maximumAge: 0 });
+                fetch(`${API_BASE_URL}/update_location`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, lat: pos.coords.latitude, lon: pos.coords.longitude }) });
+            }, () => {}, { enableHighAccuracy: true, maximumAge: 0 });
         }
 
-        // Get AI Medical Guidance
-        let triageRes = await fetch(`${API_BASE_URL}/ai_triage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: emergencyType, services: triggerData.services })
-        });
+        let triageRes = await fetch(`${API_BASE_URL}/ai_triage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: emergencyType, services: services }) });
         let triageData = await triageRes.json();
-
         outputDiv.innerHTML = triageData.suggestions.join("<br><br>");
-
-    } catch (error) {
-        console.error("Emergency trigger failed:", error);
-        window.lastDispatchedServices = {};
-        outputDiv.innerHTML = `
-            <strong style='color:red;'>Network timeout (Server waking up). Showing default emergency numbers:</strong><br><br>
-            🏥 Hospital: <a href='tel:112' style='color:#FF003C;'>112</a><br>
-            🚓 Police: <a href='tel:100' style='color:#FF003C;'>100</a><br>
-            🚑 Ambulance: <a href='tel:102' style='color:#FF003C;'>102</a>
-        `;
+    } else {
+        outputDiv.innerHTML = "<span style='color:red;'>GPS denied. Cannot load map. Call 112.</span>";
     }
 }
 
-// =========================================================
-// 3. PROFILE MANAGEMENT (Profile.html Logic)
-// =========================================================
-function openMenu() {
-    document.getElementById('edit-menu').style.display = 'block';
-}
-
-function closeMenu() {
-    document.getElementById('edit-menu').style.display = 'none';
-}
-
-async function saveProfile() {
-    const userEmail = localStorage.getItem('raksham_user_email');
-    const payload = {
-        current_email: userEmail,
-        email: document.getElementById('e-email').value.trim(),
-        name: document.getElementById('e-name').value,
-        blood_group: document.getElementById('e-blood').value,
-        allergies: document.getElementById('e-allergies').value,
-        conditions: document.getElementById('e-cond').value,
-        phone: document.getElementById('e-phone').value,
-        em1: document.getElementById('e-em1').value,
-        em2: document.getElementById('e-em2').value,
-        em3: document.getElementById('e-em3').value,
-        em4: document.getElementById('e-em4').value,
-        em5: document.getElementById('e-em5').value,
-        em6: document.getElementById('e-em6').value
+// --- VOICE & CHATBOT ---
+function startVoiceRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("Voice input is not supported in this browser.");
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN'; recognition.interimResults = false;
+    const micBtn = document.getElementById('mic-btn');
+    const originalBg = micBtn.style.background;
+    micBtn.style.background = '#FF003C'; 
+    recognition.start();
+    recognition.onresult = (event) => {
+        document.getElementById('chat-input').value = event.results[0][0].transcript;
+        sendChatMessage(); 
     };
-
-    try {
-        let response = await fetch(`${API_BASE_URL}/update_profile`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        let data = await response.json();
-        
-        if (!data.error) {
-            localStorage.setItem('raksham_user_email', payload.email); // Update local storage if email changed
-            window.location.reload(); // Refresh to show new data
-        } else {
-            alert(data.error);
-        }
-    } catch (error) {
-        alert("Failed to update profile. Please try again.");
-    }
+    recognition.onend = () => { micBtn.style.background = originalBg; };
 }
 
-// 🔧 FIX: rolling chat history so the AI has conversational context
-window.chatHistory = window.chatHistory || [];
+function speakText(text) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel(); 
+    const cleanText = text.replace(/<\/?[^>]+(>|$)/g, "").replace(/[*_#]/g, "");
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'en-IN'; utterance.rate = 1.05; 
+    window.speechSynthesis.speak(utterance);
+}
 
+window.chatHistory = window.chatHistory || [];
 async function sendChatMessage() {
     const inputField = document.getElementById('chat-input');
     const chatOutput = document.getElementById('chat-output');
-
     if (!inputField || !chatOutput) return;
-
     const message = inputField.value.trim();
     if (!message) return;
 
     chatOutput.innerHTML += `<div class="user-msg"><b>You:</b> ${escapeHtml(message)}</div>`;
-    inputField.value = "";
-    chatOutput.scrollTop = chatOutput.scrollHeight;
-
+    inputField.value = ""; chatOutput.scrollTop = chatOutput.scrollHeight;
     window.chatHistory.push({ role: 'user', content: message });
 
-    // typing indicator
     const typingId = 'typing-' + Date.now();
     chatOutput.innerHTML += `<div class="ai-msg" id="${typingId}"><b>Raksham AI:</b> <em>typing...</em></div>`;
     chatOutput.scrollTop = chatOutput.scrollHeight;
 
     try {
         let response = await fetch(`${API_BASE_URL}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                message: message, 
-                services: window.lastDispatchedServices || {},
-                history: window.chatHistory.slice(-6)
-            })
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message, services: window.lastDispatchedServices || {}, history: window.chatHistory.slice(-6) })
         });
         let data = await response.json();
-        
-        const typingEl = document.getElementById(typingId);
-        if (typingEl) typingEl.remove();
-        
+        document.getElementById(typingId)?.remove();
         chatOutput.innerHTML += `<div class="ai-msg"><b>Raksham AI:</b> ${escapeHtml(data.response)}</div>`;
         chatOutput.scrollTop = chatOutput.scrollHeight;
-        
         speakText(data.response); 
-        
         window.chatHistory.push({ role: 'assistant', content: data.response });
-        if (window.chatHistory.length > 12) {
-            window.chatHistory = window.chatHistory.slice(-12);
-        }
+        if (window.chatHistory.length > 12) window.chatHistory = window.chatHistory.slice(-12);
     } catch (error) {
-        console.error("Chat error:", error);
-        const typingEl = document.getElementById(typingId);
-        if (typingEl) typingEl.remove();
-        chatOutput.innerHTML += `<div class="ai-msg"><b>Raksham AI:</b> Connection issue. If this is urgent, call 112.</div>`;
+        document.getElementById(typingId)?.remove();
+        chatOutput.innerHTML += `<div class="ai-msg"><b>Raksham AI:</b> Connection issue. Call 112.</div>`;
     }
 }
 
 function escapeHtml(str) {
     const div = document.createElement('div');
-    div.innerText = str;
-    return div.innerHTML;
+    div.innerText = str; return div.innerHTML;
 }
-
-// Allow pressing Enter in chat input
 document.addEventListener('DOMContentLoaded', () => {
-    const chatInput = document.getElementById('chat-input');
-    if (chatInput) {
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendChatMessage();
-        });
-    }
+    document.getElementById('chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChatMessage(); });
 });
 
-// =========================================================
-// 3B. MEDICAL REPORT UPLOAD + AI SUMMARIZATION
-// =========================================================
+// --- MENU & LOGIN ---
+function openMenu() { document.getElementById('edit-menu').style.display = 'block'; }
+function closeMenu() { document.getElementById('edit-menu').style.display = 'none'; }
+async function saveProfile() {
+    const payload = {
+        current_email: localStorage.getItem('raksham_user_email'),
+        email: document.getElementById('e-email').value.trim(), name: document.getElementById('e-name').value,
+        blood_group: document.getElementById('e-blood').value, allergies: document.getElementById('e-allergies').value,
+        conditions: document.getElementById('e-cond').value, phone: document.getElementById('e-phone').value,
+        em1: document.getElementById('e-em1').value, em2: document.getElementById('e-em2').value,
+        em3: document.getElementById('e-em3').value, em4: document.getElementById('e-em4').value,
+        em5: document.getElementById('e-em5').value, em6: document.getElementById('e-em6').value
+    };
+    try {
+        let response = await fetch(`${API_BASE_URL}/update_profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        let data = await response.json();
+        if (!data.error) { localStorage.setItem('raksham_user_email', payload.email); window.location.reload(); } else alert(data.error);
+    } catch (error) { alert("Failed to update profile."); }
+}
 
-// Resizes/compresses an image client-side before sending to the backend,
-// so we don't ship multi-MB photos to the DB.
+async function attemptLogin() {
+    const email = document.getElementById('login-email')?.value.trim().toLowerCase();
+    const password = document.getElementById('login-password')?.value.trim();
+    if (!email || !password) return alert("Please enter both email and password."); 
+    try {
+        let response = await fetch(`${API_BASE_URL}/login`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email: email, password: password }) });
+        let data = await response.json();
+        if (data.error) alert(data.error); 
+        else { localStorage.setItem('raksham_user_email', email); window.location.href = 'profile.html'; }
+    } catch (error) { alert("Server error."); }
+}
+function logout() { localStorage.removeItem('raksham_user_email'); window.location.href = 'login.html'; }
+
+// --- MEDICAL REPORT ---
 function resizeImageClientSide(file, maxWidth = 1200, quality = 0.7) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
-                const scale = Math.min(1, maxWidth / img.width);
                 const canvas = document.createElement('canvas');
-                canvas.width = img.width * scale;
-                canvas.height = img.height * scale;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const scale = Math.min(1, maxWidth / img.width);
+                canvas.width = img.width * scale; canvas.height = img.height * scale;
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
                 resolve(canvas.toDataURL('image/jpeg', quality));
             };
-            img.onerror = reject;
-            img.src = e.target.result;
+            img.onerror = reject; img.src = e.target.result;
         };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+        reader.onerror = reject; reader.readAsDataURL(file);
     });
 }
-
 async function uploadMedicalReport() {
-    const fileInput = document.getElementById('e-report-upload');
-    const previewDiv = document.getElementById('report-summary-preview');
-    const userEmail = localStorage.getItem('raksham_user_email');
-
-    if (!fileInput || !fileInput.files[0]) {
-        alert("Please choose an image of your medical report first.");
-        return;
-    }
-    if (!userEmail) {
-        alert("You must be logged in.");
-        return;
-    }
-
-    if (previewDiv) previewDiv.innerHTML = "<em>Uploading & analyzing report... this can take a few seconds.</em>";
-
+    const fileInput = document.getElementById('e-report-upload'), previewDiv = document.getElementById('report-summary-preview'), userEmail = localStorage.getItem('raksham_user_email');
+    if (!fileInput || !fileInput.files[0]) return alert("Please choose an image.");
+    if (!userEmail) return alert("You must be logged in.");
+    if (previewDiv) previewDiv.innerHTML = "<em>Uploading & analyzing report...</em>";
     try {
         const resizedBase64 = await resizeImageClientSide(fileInput.files[0]);
-
-        let response = await fetch(`${API_BASE_URL}/upload_medical_report`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: userEmail, image_base64: resizedBase64 })
-        });
+        let response = await fetch(`${API_BASE_URL}/upload_medical_report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, image_base64: resizedBase64 }) });
         let data = await response.json();
-
-        if (data.error) {
-            if (previewDiv) previewDiv.innerHTML = `<span style="color:red;">${data.error}</span>`;
-        } else {
-            if (previewDiv) previewDiv.innerText = data.summary;
-        }
-    } catch (error) {
-        console.error("Report upload failed:", error);
-        if (previewDiv) previewDiv.innerHTML = `<span style="color:red;">Upload failed. Please try again.</span>`;
-    }
+        if (data.error && previewDiv) previewDiv.innerHTML = `<span style="color:red;">${data.error}</span>`;
+        else if (previewDiv) previewDiv.innerText = data.summary;
+    } catch (error) { if (previewDiv) previewDiv.innerHTML = `<span style="color:red;">Upload failed.</span>`; }
 }
-
 async function setMedicalVisibility(showSummary) {
     const userEmail = localStorage.getItem('raksham_user_email');
     if (!userEmail) return;
-    try {
-        await fetch(`${API_BASE_URL}/set_medical_visibility`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: userEmail, show_medical_summary: showSummary })
-        });
-    } catch (error) {
-        console.error("Failed to update visibility:", error);
-    }
+    try { await fetch(`${API_BASE_URL}/set_medical_visibility`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, show_medical_summary: showSummary }) }); } catch (error) {}
 }
 
-// =========================================================
-// 4. LOGIN LOGIC
-// ========================================================
-async function attemptLogin() {
-    const emailInput = document.getElementById('login-email');
-    const passwordInput = document.getElementById('login-password');
-    
-    if (!emailInput || !passwordInput) return;
-    
-    const email = emailInput.value.trim().toLowerCase();
-    const password = passwordInput.value.trim();
-    
-    if (!email || !password) return alert("Please enter both email and password."); 
-          
-    try {
-        let response = await fetch(`${API_BASE_URL}/login`, { 
-             method: 'POST', 
-             headers: {'Content-Type': 'application/json'}, 
-             body: JSON.stringify({ email: email, password: password }) 
-         });
-        let data = await response.json();
-                 
-        if (data.error) { 
-             alert(data.error); 
-         } else { 
-             localStorage.setItem('raksham_user_email', email); 
-             window.location.href = 'profile.html'; 
-         }
-    } catch (error) { 
-         alert("Server error. Please try again."); 
-    }
-}
-
-function logout() {
-    localStorage.removeItem('raksham_user_email');
-    window.location.href = 'login.html';
-}
+window.onload = fetchAndDisplayData;
 
 // Execute data fetching on page load
 window.onload = fetchAndDisplayData;
