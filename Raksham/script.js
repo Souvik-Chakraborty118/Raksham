@@ -139,7 +139,60 @@ function populateProfileDOM(data) {
     setInput('e-em6', data.em6);
 }
 
+// --- VOICE TO TEXT (Listen to User) ---
+function startVoiceRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Voice input is not supported in this browser. Please type your message.");
+        return;
+    }
 
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN'; // Set to India English (can use en-US too)
+    recognition.interimResults = false;
+    
+    const micBtn = document.getElementById('mic-btn');
+    const originalBg = micBtn.style.background;
+    
+    // Turn button red while recording
+    micBtn.style.background = '#FF003C'; 
+
+    recognition.start();
+
+    recognition.onresult = (event) => {
+        const speechResult = event.results[0][0].transcript;
+        document.getElementById('chat-input').value = speechResult;
+        
+        // Auto-send the message immediately to save time in an emergency
+        sendChatMessage(); 
+    };
+
+    recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+    };
+
+    recognition.onend = () => {
+        // Revert button color when done
+        micBtn.style.background = originalBg; 
+    };
+}
+
+// --- TEXT TO VOICE (Read AI Response Aloud) ---
+function speakText(text) {
+    if (!('speechSynthesis' in window)) return;
+    
+    // Stop any current audio before starting a new one
+    window.speechSynthesis.cancel(); 
+    
+    // Strip out HTML tags (like <b> or <br>) and markdown so it sounds natural
+    const cleanText = text.replace(/<\/?[^>]+(>|$)/g, "").replace(/[*_#]/g, "");
+    
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'en-IN'; // Set voice accent
+    utterance.rate = 1.05;    // Speak slightly faster for emergencies
+    
+    window.speechSynthesis.speak(utterance);
+}
 // =========================================================
 // 2. EMERGENCY TRIGGER SEQUENCE (Index.html Logic)
 // =========================================================
@@ -342,24 +395,28 @@ async function sendChatMessage() {
         let response = await fetch(`${API_BASE_URL}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: message,
+            body: JSON.stringify({ 
+                message: message, 
                 services: window.lastDispatchedServices || {},
                 history: window.chatHistory.slice(-6)
             })
         });
         let data = await response.json();
-
+        
         const typingEl = document.getElementById(typingId);
         if (typingEl) typingEl.remove();
-
+        
         chatOutput.innerHTML += `<div class="ai-msg"><b>Raksham AI:</b> ${escapeHtml(data.response)}</div>`;
         chatOutput.scrollTop = chatOutput.scrollHeight;
-
+        
+        // 👉 ADD THIS EXACT LINE HERE TO MAKE IT SPEAK 👈
+        speakText(data.response); 
+        
         window.chatHistory.push({ role: 'assistant', content: data.response });
         if (window.chatHistory.length > 12) {
             window.chatHistory = window.chatHistory.slice(-12);
         }
+    }
     } catch (error) {
         console.error("Chat error:", error);
         const typingEl = document.getElementById(typingId);
