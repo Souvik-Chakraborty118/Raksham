@@ -58,9 +58,10 @@
             <div class="data-box" id="chat-box" style="display:none;">
                 <h3>Raksham AI Assistant</h3>
                 <div id="chat-output" class="chat-output"></div>
-                <div class="chat-input-row">
-                    <input id="chat-input" type="text" placeholder="Ask Raksham AI...">
-                    <button class="btn btn-dark" onclick="sendChatMessage()">Send</button>
+                <div class="chat-input-row" style="display: flex; gap: 5px; align-items: center;">
+                    <button id="mic-btn" onclick="startVoiceRecognition()" style="background: #333; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;" title="Tap to Speak">🎤</button>
+                    <input id="chat-input" type="text" placeholder="Ask Raksham AI..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <button class="btn btn-dark" onclick="sendChatMessage()" style="padding: 8px 15px; margin: 0; width: auto;">Send</button>
                 </div>
             </div>
         </div>
