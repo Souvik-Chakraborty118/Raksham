@@ -310,7 +310,27 @@ async def trigger_emergency(payload: EmergencyPayload, background_tasks: Backgro
         pass
 
     return {"status": "Emergency Triggered", "services": services}
+@app.post("/chat")
+async def chat_endpoint(payload: ChatPayload):
+    user_message = (payload.message or "").lower()
+    services = payload.services or {}
+    
+    # Extract nearest facility info if available
+    hosp_name = services.get('hospital', {}).get('name', 'the nearest hospital')
+    
+    # Intelligent emergency responses based on user queries
+    if "bleed" in user_message or "blood" in user_message:
+        reply = "Apply firm, direct pressure to the wound using a clean cloth or bandage. Do not remove the cloth if it becomes soaked; place another one on top."
+    elif "breath" in user_message or "cpr" in user_message:
+        reply = "Check if the airway is clear. If the person is unresponsive and not breathing normally, begin chest compressions immediately (100-120 bpm)."
+    elif "hospital" in user_message or "where" in user_message:
+        reply = f"The closest emergency facility dispatched for you is {hosp_name}. Follow the map directions provided on your screen."
+    elif "pain" in user_message or "hurt" in user_message:
+        reply = "Keep the victim as still and comfortable as possible. Do not give them anything to eat or drink until emergency responders arrive."
+    else:
+        reply = f"Stay calm. Help is being coordinated. For immediate assistance regarding your situation, please contact emergency services or head to {hosp_name}."
 
+    return {"response": reply}
 @app.post("/ai_triage")
 async def ai_triage(payload: TriagePayload):
     dispatched = payload.services or {}
