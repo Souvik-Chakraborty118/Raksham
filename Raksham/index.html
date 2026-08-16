@@ -53,18 +53,16 @@
         <div id="guidance-screen" class="hidden">
             <h2 class="heavy-title">IMMEDIATE ACTIONS</h2>
             
-            <!-- 👇 NEW SMS EMERGENCY DISPATCH BUTTON 👇 -->
-            <a id="sms-112-btn" href="sms:112" class="btn" style="display:block; text-align:center; background-color:#ff9800; color:white; border-radius:12px; margin-bottom: 20px; font-weight:bold; padding: 15px; text-decoration:none; box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);">
-                🚨 SMS 112 EMERGENCY SERVICES 🚨
-            </a>
+            <!-- 👇 DYNAMIC SMS BUTTONS WILL INJECT HERE 👇 -->
+            <div id="sms-action-buttons"></div>
 
             <div class="data-box red-text bold-text" id="ai-suggestions"></div>
             <p class="subtitle">Ambulance dispatched. Stay with the victim.</p>
 
-           <div class="data-box" id="chat-box" style="display:none;">
+            <!-- CHATBOT & VOICE UI -->
+            <div class="data-box" id="chat-box" style="display:none; margin-top: 20px;">
                 <h3>Raksham AI Assistant</h3>
                 <div id="chat-output" class="chat-output"></div>
-                <!-- 👇 NEW VOICE INPUT ROW 👇 -->
                 <div class="chat-input-row" style="display: flex; gap: 5px; align-items: center;">
                     <button id="mic-btn" onclick="startVoiceRecognition()" style="background: #333; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;" title="Tap to Speak">🎤</button>
                     <input id="chat-input" type="text" placeholder="Ask Raksham AI..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
