@@ -92,8 +92,8 @@ async function fetchFacilitiesClientSide(lat, lon) {
         ambulance: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@${lat},${lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: "Ambulance Dispatch", phone: "102" }
     };
 
-    // 1. Fast Overpass Query - STRICT 2.8km (2800m) FOR ALL
-    const query = `[out:json][timeout:5];(nwr["amenity"~"hospital|clinic"](around:2800,${lat},${lon});nwr["healthcare"="hospital"](around:2800,${lat},${lon});nwr["amenity"="police"](around:2800,${lat},${lon}););out center;`;
+    // 1. Fast Overpass Query - 1.5km for Hospitals, 3km for Police
+    const query = `[out:json][timeout:5];(nwr["amenity"~"hospital|clinic"](around:1500,${lat},${lon});nwr["healthcare"="hospital"](around:1500,${lat},${lon});nwr["amenity"="police"](around:3000,${lat},${lon}););out center;`;
     const encodedQuery = encodeURIComponent(query);
     
     const mirrors = [
@@ -128,7 +128,7 @@ async function fetchFacilitiesClientSide(lat, lon) {
                 function getBest(arr, defName, defPhone) {
                     if(!arr.length) return null;
                     arr.sort((a, b) => a.dist - b.dist);
-                    let best = arr[0];
+                    let best = arr[0]; // This strictly chooses the absolutely closest 1 possible
                     let n = best.tags.name || best.tags.operator || defName;
                     let p = best.tags.phone || best.tags['contact:phone'] || defPhone;
                     
@@ -150,10 +150,10 @@ async function fetchFacilitiesClientSide(lat, lon) {
 
     // 2. INDEPENDENT BACKUP APIS
     
-    // Backup for Hospital (Strict ~2.8km limit)
+    // Backup for Hospital (Strict ~1.5km limit)
     if (services.hospital.name === "Emergency Hospital") {
         try {
-            let viewBox = `${lon-0.025},${lat+0.025},${lon+0.025},${lat-0.025}`;
+            let viewBox = `${lon-0.015},${lat+0.015},${lon+0.015},${lat-0.015}`;
             let nomResHosp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=hospital&viewbox=${viewBox}&bounded=1&limit=3`);
             let nomDataHosp = await nomResHosp.json();
             
@@ -176,10 +176,10 @@ async function fetchFacilitiesClientSide(lat, lon) {
         } catch(e) { console.warn("Hospital Backup API failed"); }
     }
 
-    // Backup for Police Station (Strict ~2.8km limit)
+    // Backup for Police Station (Strict ~3km limit)
     if (services.police_station.name === "Local Police") {
         try {
-            let viewBoxPol = `${lon-0.025},${lat+0.025},${lon+0.025},${lat-0.025}`;
+            let viewBoxPol = `${lon-0.03},${lat+0.03},${lon+0.03},${lat-0.03}`;
             let nomResPol = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=police+station&viewbox=${viewBoxPol}&bounded=1&limit=3`);
             let nomDataPol = await nomResPol.json();
 
