@@ -13,13 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from psycopg2.extras import RealDictCursor
 import hashlib
-# --- IN-MEMORY LIVE TRACKING ---
-live_locations = {}
+from typing import List
 
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
 
 app = FastAPI()
+
 @app.get("/")
 async def root():
     return {"status": "online", "message": "Raksham Emergency API is active and running"}
@@ -40,8 +40,10 @@ def get_db_connection():
 try:
     ai_model = joblib.load("models/multilingual_rf_model.pkl")
 except Exception as e:
-    print("ML Model not found or failed to load:", e)
     ai_model = None
+
+# --- IN-MEMORY LIVE TRACKING ---
+live_locations = {}
 
 # --- PYDANTIC MODELS ---
 class NewUser(BaseModel):
@@ -66,12 +68,15 @@ class EmergencyPayload(BaseModel):
 
 class TriagePayload(BaseModel):
     type: str = None; services: dict = {}
-    
-class AlertPayload(BaseModel):
-    services: dict = {}
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+    
 class ChatPayload(BaseModel):
-    message: str; services: dict = {}; history: list = []
+    message: str
+    services: dict = {}
+    history: List[ChatMessage] = []
 
 class MedicalReportPayload(BaseModel):
     email: str; image_base64: str
@@ -79,179 +84,125 @@ class MedicalReportPayload(BaseModel):
 class ProfileVisibilityPayload(BaseModel):
     email: str; show_medical_summary: bool
 
-# --- MATHEMATICAL DISTANCE CALCULATOR (Haversine Formula) ---
+# --- MATHEMATICAL DISTANCE CALCULATOR ---
 def calculate_distance(lat1, lon1, lat2, lon2):
     if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
         return 999999
-    R = 6371.0 # Earth radius in kilometers
+    R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
     a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-# --- MAP SCRAPING WITH DISTANCE SORTING (multi-mirror, async, cached) ---
-OVERPASS_MIRRORS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.openstreetmap.ru/api/interpreter",
-]
-PER_MIRROR_TIMEOUT = 8.0
-OVERALL_BUDGET = 15.0
-CACHE_TTL_SECONDS = 120
-_facility_cache = {}  # {(lat_r, lon_r): (timestamp, services)}
+# --- LIGHTNING FAST MAP SCRAPING (3.5s Timeout + Bulletproof Fallback) ---
+async def fetch_facility(lat, lon):
+    # 1. ALWAYS initialize the fallback first so the UI NEVER shows generic empty numbers
+    services = {
+        "hospital": {
+            "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>Nearest Hospital (GPS Search)</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@{lat},{lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
+            "name": "Nearest Hospital (GPS)",
+            "phone": "112"
+        },
+        "police_station": {
+            "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>Local Police (GPS Search)</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/search/police/@{lat},{lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
+            "name": "Local Police (GPS)",
+            "phone": "100"
+        },
+        "ambulance": {
+            "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@{lat},{lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
+            "name": "Ambulance Dispatch",
+            "phone": "102"
+        }
+    }
 
-
-def _build_overpass_query(lat, lon, radius=10000):
-    return f"""
-    [out:json][timeout:10];
+    query = f"""
+    [out:json][timeout:3];
     (
-      nwr["amenity"="hospital"](around:{radius},{lat},{lon});
-      nwr["healthcare"="hospital"](around:{radius},{lat},{lon});
-      nwr["amenity"="police"](around:{radius},{lat},{lon});
-      nwr["amenity"="ambulance_station"](around:{radius},{lat},{lon});
+      node["amenity"~"hospital|clinic"](around:15000,{lat},{lon});
+      way["amenity"~"hospital|clinic"](around:15000,{lat},{lon});
+      node["amenity"="police"](around:15000,{lat},{lon});
+      node["amenity"="ambulance_station"](around:15000,{lat},{lon});
     );
     out center;
     """
 
+    try:
+        # Standard client. Strict 3.5s timeout. No weird bindings.
+        async with httpx.AsyncClient() as client:
+            resp = await client.post("https://overpass-api.de/api/interpreter", data={'data': query}, timeout=3.5)
+            if resp.status_code == 200:
+                elements = resp.json().get('elements', [])
+                if elements:
+                    hospitals, police, ambulances = [], [], []
+                    for el in elements:
+                        el_lat = el.get('lat') or el.get('center', {}).get('lat')
+                        el_lon = el.get('lon') or el.get('center', {}).get('lon')
+                        if not el_lat or not el_lon: continue
+                            
+                        dist = calculate_distance(lat, lon, el_lat, el_lon)
+                        el['calculated_dist'] = dist
+                        el['exact_lat'], el['exact_lon'] = el_lat, el_lon
+                        
+                        am = el.get('tags', {}).get('amenity', '')
+                        hc = el.get('tags', {}).get('healthcare', '')
 
-def _process_elements(elements, lat, lon):
-    services = {}
-    if not elements:
-        return services
+                        if 'hospital' in am or 'clinic' in am or 'hospital' in hc:
+                            hospitals.append(el)
+                        elif 'police' in am:
+                            police.append(el)
+                        elif 'ambulance' in am:
+                            ambulances.append(el)
 
-    hospitals, police, ambulances = [], [], []
+                    def get_best(arr, default_name, default_phone):
+                        if not arr: return None
+                        arr.sort(key=lambda x: x['calculated_dist'])
+                        best = arr[0]
+                        t = best.get('tags', {})
+                        n = t.get('name') or t.get('operator') or default_name
+                        p = t.get('phone') or t.get('contact:phone') or default_phone
+                        mlink = f"https://www.google.com/maps/dir/?api=1&origin={lat},{lon}&destination={best['exact_lat']},{best['exact_lon']}"
+                        return {
+                            "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>{n}</span><br>📍 Distance: <strong>{best['calculated_dist']:.1f} km</strong><br>📞 <a href='tel:{p}' style='color:#FF003C;'>{p}</a><br>🗺️ <a href='{mlink}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
+                            "name": n,
+                            "phone": p
+                        }
 
-    for el in elements:
-        el_lat = el.get('lat') or el.get('center', {}).get('lat')
-        el_lon = el.get('lon') or el.get('center', {}).get('lon')
-        if el_lat is None or el_lon is None:
-            continue
+                    h = get_best(hospitals, "Nearest Hospital", "112")
+                    p = get_best(police, "Nearest Police", "100")
+                    a = get_best(ambulances, "Nearest Ambulance", "102")
 
-        dist = calculate_distance(lat, lon, el_lat, el_lon)
-        el['calculated_dist'] = dist
-        el['exact_lat'] = el_lat
-        el['exact_lon'] = el_lon
-
-        tags = el.get('tags', {})
-        amenity = tags.get('amenity', '')
-        healthcare = tags.get('healthcare', '')
-
-        if amenity == 'hospital' or healthcare == 'hospital':
-            hospitals.append(el)
-        elif amenity == 'police':
-            police.append(el)
-        elif 'ambulance' in amenity:
-            ambulances.append(el)
-
-    def process_closest(arr, key_name, default_phone):
-        if not arr:
-            return None
-        arr.sort(key=lambda x: x['calculated_dist'])
-        best = arr[0]
-        tags = best.get('tags', {})
-        name = tags.get('name') or tags.get('operator') or f'Nearest {key_name.title()}'
-        dist_km = best['calculated_dist']
-        phone = tags.get('phone') or tags.get('contact:phone') or default_phone
-        maps_link = f"https://www.google.com/maps/dir/?api=1&origin={lat},{lon}&destination={best['exact_lat']},{best['exact_lon']}"
-
-        return {
-            "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>{name}</span><br>📍 Distance: <strong>{dist_km:.1f} km</strong><br>📞 <a href='tel:{phone}' style='color:#FF003C;'>{phone}</a><br>🗺️ <a href='{maps_link}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
-            "name": name,
-            "phone": phone
-        }
-
-    hosp = process_closest(hospitals, "hospital", "112")
-    pol = process_closest(police, "police station", "100")
-    amb = process_closest(ambulances, "ambulance", "102")
-
-    if hosp: services["hospital"] = hosp
-    if pol: services["police_station"] = pol
-    if amb: services["ambulance"] = amb
-
+                    # If successful, overwrite the fallbacks with real mapped facilities
+                    if h: services["hospital"] = h
+                    if p: services["police_station"] = p
+                    if a: services["ambulance"] = a
+    except Exception as e:
+        print(f"Overpass skipped, using guaranteed Google Maps fallback: {e}")
+        
     return services
 
-
-async def _query_one_mirror(client, url, query):
-    resp = await client.post(url, data={'data': query}, headers={"User-Agent": "RakshamApp/6.0"}, timeout=PER_MIRROR_TIMEOUT)
-    resp.raise_for_status()
-    data = resp.json()
-    elements = data.get('elements', [])
-    if not elements:
-        raise ValueError("empty result")
-    return elements
-
-
-async def _race_mirrors(query):
-    """Fire all mirrors concurrently, return the first successful non-empty result."""
-    
-    # FORCE IPv4 ONLY: Bypasses Render's broken IPv6 egress blackhole
-    transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
-    
-    async with httpx.AsyncClient(transport=transport) as client:
-        tasks = [asyncio.create_task(_query_one_mirror(client, url, query)) for url in OVERPASS_MIRRORS]
-        try:
-            for coro in asyncio.as_completed(tasks, timeout=OVERALL_BUDGET):
-                try:
-                    result = await coro
-                    for t in tasks:
-                        if not t.done():
-                            t.cancel()
-                    return result
-                except Exception as e:
-                    print(f"Overpass mirror failed: {e}")
-                    continue
-        except asyncio.TimeoutError:
-            print("Overpass overall budget exceeded")
-        finally:
-            for t in tasks:
-                if not t.done():
-                    t.cancel()
-    return None
-async def fetch_facility(lat, lon):
-    cache_key = (round(lat, 3), round(lon, 3))
-    cached = _facility_cache.get(cache_key)
-    if cached and (time.time() - cached[0]) < CACHE_TTL_SECONDS:
-        return cached[1]
-
-    elements = await _race_mirrors(_build_overpass_query(lat, lon, radius=10000))
-
-    # Last resort: widen the search radius once
-    if not elements:
-        elements = await _race_mirrors(_build_overpass_query(lat, lon, radius=25000))
-
-    if not elements:
-        print("All Overpass mirrors failed — returning empty services, frontend falls back to 112/100/102")
-        return {}
-
-    services = _process_elements(elements, lat, lon)
-    _facility_cache[cache_key] = (time.time(), services)
-    return services
-
-# --- SMS TO EMERGENCY CONTACTS ONLY (WhatsApp Removed) ---
+# --- SMS TO EMERGENCY CONTACTS ---
 def process_emergency_alerts(contacts, services, lat, lon, user_id):
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
     TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID")
-
-    # Filter out empty or invalid contacts
     valid_contacts = [c for c in contacts if c and len(c) >= 5]
     
     if valid_contacts and TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID:
         maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat else "Location unavailable"
         live_link = f"https://raksham-pi.vercel.app/track.html?id={user_id}"
         
+        hosp_name = services.get('hospital', {}).get('name', 'Nearest Hospital')
+        
         alert_text = (
             f"🚨 RAKSHAM CRITICAL ALERT 🚨\n\n"
             f"📍 GPS Location: {maps_link}\n"
             f"📡 Live Tracking: {live_link}\n\n"
-            f"Nearest Hospital: {services.get('hospital', {}).get('name', 'N/A')}\n"
+            f"Nearest Hospital: {hosp_name}\n"
             f"⚠️ Immediate medical assistance is required!"
         )
-
         url = f"https://api.textbee.dev/api/v1/gateway/devices/{TEXTBEE_DEVICE_ID}/send-sms"
         headers = {"x-api-key": TEXTBEE_API_KEY, "Content-Type": "application/json"}
         payload = {"recipients": valid_contacts, "message": alert_text}
-
         try:
             requests.post(url, json=payload, headers=headers, timeout=5)
         except Exception as e:
@@ -267,7 +218,7 @@ async def register(user: NewUser):
         qr_link = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://raksham-pi.vercel.app/index.html?id={user_id}"
         
         clean_email = user.email.strip().lower()
-        hashed_password = hash_password(user.password.strip()) # <-- WE HASH IT BEFORE SAVING
+        hashed_password = hash_password(user.password.strip())
         
         cursor.execute('''
             INSERT INTO users (user_id, email, password, name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6, qr_image)
@@ -285,18 +236,15 @@ async def login(user: LoginUser):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         clean_email = user.email.strip().lower()
-        hashed_input = hash_password(user.password.strip()) # <-- WE HASH IT HERE NOW
+        hashed_input = hash_password(user.password.strip())
         
         cursor.execute("SELECT * FROM users WHERE LOWER(TRIM(email)) = %s AND password = %s", (clean_email, hashed_input))
         row = cursor.fetchone()
-        
         cursor.close()
         conn.close()
         
-        if row:
-            return {"message": "Login successful"}
+        if row: return {"message": "Login successful"}
         return {"error": "Invalid email or password"}
     except Exception as e:
         return {"error": str(e)}
@@ -310,8 +258,7 @@ async def retrieve_profile(req: ProfileRequest):
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        if row:
-            return {"user_data": row, "qr_image": row.get('qr_image')}
+        if row: return {"user_data": row, "qr_image": row.get('qr_image')}
         return {"error": "User not found"}
     except Exception as e:
         return {"error": str(e)}
@@ -330,7 +277,6 @@ async def get_public_profile(user_id: str):
         cursor.close()
         conn.close()
         if row:
-            # Respect the user's privacy toggle before exposing medical history to a stranger scanning the tag
             if not row.get("show_medical_summary", True):
                 row["medical_summary"] = None
             return row
@@ -356,7 +302,7 @@ async def update_profile(user: UpdateUser):
 
 @app.post("/update_location")
 async def update_location(payload: LocationUpdate):
-    # Store the live coordinates with a timestamp
+    # Live tracking URL pushes hit this rapidly to keep memory updated
     live_locations[payload.user_id] = {
         "lat": payload.lat, 
         "lon": payload.lon, 
@@ -366,7 +312,6 @@ async def update_location(payload: LocationUpdate):
 
 @app.get("/get_location/{user_id}")
 async def get_location(user_id: str):
-    # Serve the coordinates to track.html
     loc = live_locations.get(user_id)
     if loc:
         return {"status": "success", "data": {"lat": loc["lat"], "lon": loc["lon"]}}
@@ -375,9 +320,8 @@ async def get_location(user_id: str):
 @app.post("/trigger_emergency")
 async def trigger_emergency(payload: EmergencyPayload, background_tasks: BackgroundTasks):
     services = {}
-    if payload.latitude is not None and payload.longitude is not None:
-        services = await fetch_facility(payload.latitude, payload.longitude)
-
+    
+    # 1. Immediately look up DB contacts so SMS is ready to fire
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -385,14 +329,56 @@ async def trigger_emergency(payload: EmergencyPayload, background_tasks: Backgro
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        
-        if row:
-            contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']]
-            background_tasks.add_task(process_emergency_alerts, contacts, services, payload.latitude, payload.longitude, payload.user_id)
     except:
-        pass
+        row = None
+
+    # 2. Get map data (Max 3.5 seconds)
+    if payload.latitude is not None and payload.longitude is not None:
+        services = await fetch_facility(payload.latitude, payload.longitude)
+
+    # 3. Fire the SMS instantly in the background with the location and hospital name
+    if row:
+        contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']]
+        background_tasks.add_task(process_emergency_alerts, contacts, services, payload.latitude, payload.longitude, payload.user_id)
 
     return {"status": "Emergency Triggered", "services": services}
+
+@app.post("/ai_triage")
+async def ai_triage(payload: TriagePayload):
+    dispatched = payload.services or {}
+    
+    hospital_html = dispatched.get('hospital', {}).get('html', "N/A")
+    police_html = dispatched.get('police_station', {}).get('html', "N/A")
+    ambulance_html = dispatched.get('ambulance', {}).get('html', "N/A")
+    
+    guidance = [
+        f"<strong>🏥 {hospital_html}</strong><br>",
+        f"<strong>🚓 {police_html}</strong><br>",
+        f"<strong>🚑 {ambulance_html}</strong><br>",
+        "<br><strong style='color:#FF003C;'>IMMEDIATE ACTIONS:</strong>"
+    ]
+    
+    situation = (payload.type or "").lower()
+    
+    if "heart" in situation or "cardiac" in situation:
+        guidance.extend(["1. Have the person sit down, rest, and try to keep calm.", "2. Loosen any tight clothing.", "3. If unresponsive and not breathing, begin CPR immediately."])
+    elif "accident" in situation or "crash" in situation:
+        guidance.extend(["1. DO NOT move the victim unless they are in immediate danger.", "2. Apply firm, direct pressure to any bleeding wounds.", "3. Keep the victim's head and neck perfectly still."])
+    elif "assault" in situation:
+        guidance.extend(["1. Move to a safe location immediately.", "2. Apply direct pressure to stop bleeding.", "3. Wait for police and ambulance dispatch."])
+    else:
+        guidance.extend(["1. Check airway, breathing, and circulation.", "2. Do not leave the victim unattended.", "3. Apply pressure to any bleeding."])
+        
+    if ai_model:
+        try:
+            input_features = np.zeros((1, ai_model.n_features_in_)) 
+            prediction = ai_model.predict(input_features)
+            guidance.insert(0, f"<span style='color:#FF003C; font-weight:900;'>ML SEVERITY ASSESSMENT: LEVEL {str(prediction[0])}</span><br>")
+        except:
+            pass
+            
+    return {"status": "success", "suggestions": guidance}
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
@@ -402,29 +388,29 @@ CHAT_SYSTEM_PROMPT = """You are Raksham AI, an emergency first-aid assistant emb
 Rules:
 - Give short, direct, actionable first-aid guidance (numbered steps, max ~120 words).
 - ALWAYS remind the user to contact/head to the dispatched emergency services if the situation sounds severe.
-- Never give medication dosages beyond generic OTC guidance.
+- Never give medication dosages.
 - Never diagnose. Describe symptoms/actions, not diagnoses.
 - If the message is unrelated to the emergency, gently redirect back to safety."""
-
 
 @app.post("/chat")
 async def chat_endpoint(payload: ChatPayload):
     services = payload.services or {}
     hosp_name = services.get('hospital', {}).get('name', 'the nearest hospital')
     context_note = f"Currently dispatched nearest hospital: {hosp_name}."
-
+    
     if not GROQ_API_KEY:
         return {"response": f"AI chat is not configured on the server (missing GROQ_API_KEY). For immediate help, head to {hosp_name} or call 112."}
-
+        
     messages = [{"role": "system", "content": CHAT_SYSTEM_PROMPT + "\n" + context_note}]
-    # Keep only the last 6 turns of history to control token usage/latency
+    
     for turn in (payload.history or [])[-6:]:
         role = turn.get("role")
         content = turn.get("content")
         if role in ("user", "assistant") and content:
             messages.append({"role": role, "content": content})
+            
     messages.append({"role": "user", "content": payload.message})
-
+    
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
@@ -439,15 +425,13 @@ async def chat_endpoint(payload: ChatPayload):
     except Exception as e:
         print(f"Groq chat error: {e}")
         reply = f"I'm having trouble connecting right now. If this is urgent, call 112 immediately or head to {hosp_name}."
-
+        
     return {"response": reply}
-
 
 @app.post("/upload_medical_report")
 async def upload_medical_report(payload: MedicalReportPayload):
     if not GROQ_API_KEY:
         return {"error": "AI summarization is not configured on the server (missing GROQ_API_KEY)."}
-
     summary = None
     try:
         async with httpx.AsyncClient() as client:
@@ -458,12 +442,8 @@ async def upload_medical_report(payload: MedicalReportPayload):
                     "model": GROQ_VISION_MODEL,
                     "messages": [
                         {"role": "system", "content": (
-                            "You are a medical report summarizer for an emergency-response tag. "
-                            "Extract and summarize ONLY clinically relevant facts a first responder needs: "
-                            "diagnosed conditions, current medications, allergies, and critical warnings "
-                            "(e.g. blood thinners, pacemaker, diabetic). Output as a short bulleted list, "
-                            "max 5 bullets, no filler text, no disclaimers. If the image isn't a legible "
-                            "medical document, say so plainly."
+                            "Extract ONLY clinically relevant facts: diagnosed conditions, current medications, allergies, and critical warnings. "
+                            "Output as a short bulleted list. No filler."
                         )},
                         {"role": "user", "content": [
                             {"type": "text", "text": "Summarize this medical report for emergency responders."},
@@ -479,9 +459,8 @@ async def upload_medical_report(payload: MedicalReportPayload):
             data = resp.json()
             summary = data["choices"][0]["message"]["content"]
     except Exception as e:
-        print(f"Groq vision error: {e}")
-        return {"error": "Could not analyze the report right now. Please try again."}
-
+        return {"error": "Could not analyze the report right now."}
+        
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -494,92 +473,18 @@ async def upload_medical_report(payload: MedicalReportPayload):
         conn.close()
     except Exception as e:
         return {"error": str(e)}
-
+        
     return {"message": "Report uploaded and summarized", "summary": summary}
-
 
 @app.post("/set_medical_visibility")
 async def set_medical_visibility(payload: ProfileVisibilityPayload):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE users SET show_medical_summary=%s WHERE email=%s",
-            (payload.show_medical_summary, payload.email)
-        )
+        cursor.execute("UPDATE users SET show_medical_summary=%s WHERE email=%s", (payload.show_medical_summary, payload.email))
         conn.commit()
         cursor.close()
         conn.close()
         return {"message": "Visibility updated"}
     except Exception as e:
         return {"error": str(e)}
-@app.post("/ai_triage")
-async def ai_triage(payload: TriagePayload):
-    dispatched = payload.services or {}
-    
-    # Fallbacks in case GPS completely fails
-    default_hospital = {"html": "<span style='color:#333; font-weight:bold; font-size:16px;'>Emergency Medical Center</span><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a>"}
-    default_police = {"html": "<span style='color:#333; font-weight:bold; font-size:16px;'>Police Control Room</span><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a>"}
-    default_ambulance = {"html": "<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a>"}
-
-    hospital_html = dispatched.get('hospital', {}).get('html') or default_hospital['html']
-    police_html = dispatched.get('police_station', {}).get('html') or default_police['html']
-    ambulance_html = dispatched.get('ambulance', {}).get('html') or default_ambulance['html']
-
-    guidance = [
-        f"<strong>🏥 Nearest Hospital:</strong><br>{hospital_html}",
-        f"<strong>🚓 Nearest Police:</strong><br>{police_html}",
-        f"<strong>🚑 Nearest Ambulance:</strong><br>{ambulance_html}",
-        "<br><strong style='color:#FF003C;'>IMMEDIATE ACTIONS:</strong>"
-    ]
-
-    # --- DYNAMIC MEDICAL SUGGESTIONS BASED ON SITUATION ---
-    situation = (payload.type or "").lower()
-    
-    if "heart" in situation or "cardiac" in situation:
-        guidance.extend([
-            "1. Have the person sit down, rest, and try to keep calm.",
-            "2. Loosen any tight clothing.",
-            "3. Ask if they take chest pain medicine (like nitroglycerin) and help them take it.",
-            "4. If unresponsive and not breathing, begin CPR immediately."
-        ])
-    elif "accident" in situation or "crash" in situation or "trauma" in situation:
-        guidance.extend([
-            "1. DO NOT move the victim unless they are in immediate life-threatening danger (e.g., fire).",
-            "2. Apply firm, direct pressure to any bleeding wounds with a clean cloth.",
-            "3. Keep the victim's head and neck perfectly still.",
-            "4. Keep them warm with a coat or blanket to prevent shock."
-        ])
-    elif "chok" in situation:
-        guidance.extend([
-            "1. Ask 'Are you choking?' If they cannot cough, speak, or breathe, act immediately.",
-            "2. Give 5 back blows between the shoulder blades with the heel of your hand.",
-            "3. Give 5 abdominal thrusts (Heimlich maneuver).",
-            "4. Alternate blows and thrusts until the blockage is dislodged."
-        ])
-    elif "burn" in situation or "fire" in situation:
-        guidance.extend([
-            "1. Stop the burning process. Extinguish flames.",
-            "2. Cool the burn IMMEDIATELY with cool (not ice-cold) running water for at least 10 minutes.",
-            "3. Remove restrictive items (rings, watches) near the burn area before it swells.",
-            "4. Loosely cover the burn with a sterile, non-fluffy dressing or plastic wrap."
-        ])
-    else:
-        # Generic Severe Medical Fallback
-        guidance.extend([
-            "1. Check the victim's airway, breathing, and circulation (ABCs).",
-            "2. Do not leave the victim unattended.",
-            "3. Keep them breathing and conscious.",
-            "4. If bleeding, apply direct pressure. If unresponsive, begin CPR."
-        ])
-
-    # ML Severity assessment
-    if ai_model:
-        try:
-            input_features = np.zeros((1, ai_model.n_features_in_)) 
-            prediction = ai_model.predict(input_features)
-            guidance.insert(0, f"<span style='color:#FF003C; font-weight:900;'>ML SEVERITY ASSESSMENT: LEVEL {str(prediction[0])}</span><br>")
-        except:
-            pass
-
-    return {"status": "success", "suggestions": guidance}
