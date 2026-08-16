@@ -230,6 +230,10 @@ async function sendTriage(emergencyType) {
     document.getElementById('guidance-screen').classList.remove('hidden');
     document.getElementById('guidance-screen').style.display = 'block';
     
+    // 👇 FIX: Reveal the chatbot IMMEDIATELY so it never gets stuck hidden
+    const chatBox = document.getElementById('chat-box');
+    if (chatBox) chatBox.style.display = 'block';
+    
     const outputDiv = document.getElementById('ai-suggestions');
     outputDiv.innerHTML = "<span style='color:#333;'>Acquiring secure GPS lock... Please click 'Allow' on your browser prompt.</span>";
     
@@ -241,7 +245,7 @@ async function sendTriage(emergencyType) {
         const position = await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
             enableHighAccuracy: true, 
-            timeout: 20000, // Increased to 20 seconds
+            timeout: 20000, 
             maximumAge: 0
         });
     });
@@ -256,7 +260,7 @@ async function sendTriage(emergencyType) {
 
     try {
         if (lat) {
-            outputDiv.innerHTML = "<span style='color:green;'>GPS Locked! Finding exact closest hospitals and alerting contacts...</span>";
+            outputDiv.innerHTML = "<span style='color:green;'>GPS Locked! Waking up dispatch servers...</span>";
         } else {
             outputDiv.innerHTML = "<span style='color:red;'>GPS denied. Proceeding with national dispatch...</span>";
         }
@@ -267,22 +271,21 @@ async function sendTriage(emergencyType) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: userId, latitude: lat, longitude: lon })
         });
+        
+        // If backend is sleeping/returns 502 HTML, catch it before it breaks the JSON parser
+        if (!triggerRes.ok) throw new Error("Backend waking up or network error");
+        
         let triggerData = await triggerRes.json();
-
-        // 🔧 FIX: store dispatched services globally so the chatbot can reference them later
         window.lastDispatchedServices = triggerData.services || {};
-        // START LIVE GPS TRACKING FOR FIRST RESPONDERS
+
+        // START LIVE GPS TRACKING
         if (navigator.geolocation) {
             navigator.geolocation.watchPosition(async (pos) => {
                 try {
                     await fetch(`${API_BASE_URL}/update_location`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            user_id: userId, 
-                            lat: pos.coords.latitude, 
-                            lon: pos.coords.longitude 
-                        })
+                        body: JSON.stringify({ user_id: userId, lat: pos.coords.latitude, lon: pos.coords.longitude })
                     });
                 } catch (e) {
                     console.error("Live tracking update failed", e);
@@ -292,7 +295,7 @@ async function sendTriage(emergencyType) {
             }, { enableHighAccuracy: true, maximumAge: 0 });
         }
 
-        // Get AI Medical Guidance based on situation
+        // Get AI Medical Guidance
         let triageRes = await fetch(`${API_BASE_URL}/ai_triage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -300,19 +303,13 @@ async function sendTriage(emergencyType) {
         });
         let triageData = await triageRes.json();
 
-        // The python backend already packages the exact direction links and contact info.
         outputDiv.innerHTML = triageData.suggestions.join("<br><br>");
-
-        // Reveal the chat box now that services are dispatched
-        const chatBox = document.getElementById('chat-box');
-        if (chatBox) chatBox.style.display = 'block';
 
     } catch (error) {
         console.error("Emergency trigger failed:", error);
-        // 🔧 FIX: don't just show a dead-end error — still surface the hardcoded emergency numbers
         window.lastDispatchedServices = {};
         outputDiv.innerHTML = `
-            <strong style='color:red;'>Could not reach live dispatch — showing default emergency numbers:</strong><br><br>
+            <strong style='color:red;'>Network timeout (Server waking up). Showing default emergency numbers:</strong><br><br>
             🏥 Hospital: <a href='tel:112' style='color:#FF003C;'>112</a><br>
             🚓 Police: <a href='tel:100' style='color:#FF003C;'>100</a><br>
             🚑 Ambulance: <a href='tel:102' style='color:#FF003C;'>102</a>
