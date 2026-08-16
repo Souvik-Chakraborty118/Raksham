@@ -363,7 +363,138 @@ button[style*="background:#FF003C"], .emergency-btn {
     transition: transform 0.2s ease, filter 0.2s ease;
 }
 
-button[style*="background:#FF003C"]:hover, .emergency-btn:hover {
-    transform: scale(1.03);
-    filter: brightness(1.1);
+/* --- CHAT WIDGET (Raksham AI) --- */
+#chat-box {
+    text-align: left;
+}
+#chat-box h3 {
+    text-align: center;
+}
+.chat-output {
+    max-height: 220px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    font-size: 15px;
+    padding-right: 4px;
+}
+.chat-output .user-msg,
+.chat-output .ai-msg {
+    padding: 10px 14px;
+    border-radius: 12px;
+    margin: 8px 0;
+    line-height: 1.4;
+    animation: fadeInUp 0.3s ease forwards;
+}
+.chat-output .user-msg {
+    background-color: #F4F4F4;
+    color: #111;
+}
+.chat-output .ai-msg {
+    background-color: rgba(255, 0, 60, 0.08);
+    border: 1px solid rgba(255, 0, 60, 0.15);
+    color: #333;
+}
+.chat-output .ai-msg b,
+.chat-output .user-msg b {
+    color: #FF003C;
+}
+.chat-input-row {
+    display: flex;
+    gap: 8px;
+}
+.chat-input-row input[type="text"] {
+    flex: 1;
+    margin: 0;
+}
+.chat-input-row .btn {
+    width: auto;
+    padding: 14px 20px;
+    margin: 0;
+}
+
+/* --- MEDICAL HISTORY SUMMARY BOX (public scan view) --- */
+#medical-history-box p {
+    white-space: pre-line;
+    font-size: 1rem;
+    color: #333;
+}
+
+/* --- MEDICAL REPORT UPLOAD (profile edit menu) --- */
+.report-upload-note {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 12px;
+}
+.file-input-wrapper {
+    position: relative;
+    margin-bottom: 12px;
+}
+.file-input-wrapper input[type="file"] {
+    width: 90%;
+    padding: 12px;
+    background-color: #F4F4F4;
+    border: 2px dashed rgba(255, 0, 60, 0.3);
+    border-radius: 10px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.file-input-wrapper input[type="file"]:hover {
+    border-color: #FF003C;
+    background-color: #FFF0F3;
+}
+.report-summary-preview {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: rgba(255, 0, 60, 0.05);
+    border-radius: 10px;
+    font-size: 14px;
+    white-space: pre-line;
+    color: #333;
+    text-align: left;
+}
+
+/* --- PRIVACY TOGGLE ROW --- */
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 18px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #444;
+    text-align: left;
+}
+.toggle-row input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 42px;
+    height: 24px;
+    background-color: #ccc;
+    border-radius: 20px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    flex-shrink: 0;
+}
+.toggle-row input[type="checkbox"]::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background-color: #fff;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.toggle-row input[type="checkbox"]:checked {
+    background-color: #FF003C;
+}
+.toggle-row input[type="checkbox"]:checked::before {
+    transform: translateX(18px);
 }
