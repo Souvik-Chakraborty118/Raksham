@@ -522,39 +522,41 @@ async function setMedicalVisibility(showSummary) {
 
 // =========================================================
 // 4. LOGIN LOGIC
-// =========================================================
+// ========================================================
 async function attemptLogin() {
     const emailInput = document.getElementById('login-email');
     const passwordInput = document.getElementById('login-password');
+    
     if (!emailInput || !passwordInput) return;
-
+    
     const email = emailInput.value.trim().toLowerCase();
     const password = passwordInput.value.trim();
-    if (!email || !password) return alert("Please enter both email and password."); 
     
+    if (!email || !password) return alert("Please enter both email and password."); 
+          
     try {
         let response = await fetch(`${API_BASE_URL}/login`, { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify({ email: email, password: password }) 
-        });
+             method: 'POST', 
+             headers: {'Content-Type': 'application/json'}, 
+             body: JSON.stringify({ email: email, password: password }) 
+         });
         let data = await response.json();
-        
+                 
         if (data.error) { 
-            alert(data.error); 
-        } else { 
-            localStorage.setItem('raksham_user_email', email); 
-            window.location.href = 'profile.html'; 
-        }
+             alert(data.error); 
+         } else { 
+             localStorage.setItem('raksham_user_email', email); 
+             window.location.href = 'profile.html'; 
+         }
     } catch (error) { 
-        alert("Server error. Please try again."); 
+         alert("Server error. Please try again."); 
     }
-}
+} // <-- THIS BRACKET WAS MISSING
 
 function logout() {
     localStorage.removeItem('raksham_user_email');
     window.location.href = 'login.html';
-}
+} // <-- THIS BRACKET WAS ALSO MISSING
 
 // Execute data fetching on page load
 window.onload = fetchAndDisplayData;
