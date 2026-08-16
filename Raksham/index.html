@@ -47,7 +47,22 @@
         <div id="guidance-screen" class="hidden">
             <h2 class="heavy-title">IMMEDIATE ACTIONS</h2>
             <div class="data-box red-text bold-text" id="ai-suggestions"></div>
+            <div id="guidance-screen" class="hidden">
+            <h2 class="heavy-title">IMMEDIATE ACTIONS</h2>
+            <div class="data-box red-text bold-text" id="ai-suggestions"></div>
             <p class="subtitle">Ambulance dispatched. Stay with the victim.</p>
+
+            <!-- CHATBOT UI -->
+            <div id="chat-box" style="margin-top: 20px; border-top: 2px solid #ddd; padding-top: 15px;">
+                <h3 style="margin-bottom: 10px;">Raksham AI Assistant</h3>
+                <div id="chat-output" style="background: #f9f9f9; border: 1px solid #ccc; border-radius: 5px; height: 150px; overflow-y: auto; padding: 10px; margin-bottom: 10px; text-align: left; font-size: 14px; color: #333;"></div>
+                <div style="display: flex; gap: 5px;">
+                    <input id="chat-input" type="text" placeholder="Ask Raksham AI..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <button onclick="sendChatMessage()" style="background: #FF003C; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">Send</button>
+                </div>
+            </div>
+        </div>
+            <p class="subtitle">Emergency Contact going to get Alert. Stay with the victim.</p>
         </div>
         <div class="footer">Developed by <span>Team Raksham</span></div>
     </div>
