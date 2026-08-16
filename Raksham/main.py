@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from psycopg2.extras import RealDictCursor
 import hashlib
+# --- IN-MEMORY LIVE TRACKING ---
+live_locations = {}
 
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -182,7 +184,11 @@ async def _query_one_mirror(client, url, query):
 
 async def _race_mirrors(query):
     """Fire all mirrors concurrently, return the first successful non-empty result."""
-    async with httpx.AsyncClient() as client:
+    
+    # FORCE IPv4 ONLY: Bypasses Render's broken IPv6 egress blackhole
+    transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
+    
+    async with httpx.AsyncClient(transport=transport) as client:
         tasks = [asyncio.create_task(_query_one_mirror(client, url, query)) for url in OVERPASS_MIRRORS]
         try:
             for coro in asyncio.as_completed(tasks, timeout=OVERALL_BUDGET):
@@ -202,8 +208,6 @@ async def _race_mirrors(query):
                 if not t.done():
                     t.cancel()
     return None
-
-
 async def fetch_facility(lat, lon):
     cache_key = (round(lat, 3), round(lon, 3))
     cached = _facility_cache.get(cache_key)
@@ -352,7 +356,21 @@ async def update_profile(user: UpdateUser):
 
 @app.post("/update_location")
 async def update_location(payload: LocationUpdate):
+    # Store the live coordinates with a timestamp
+    live_locations[payload.user_id] = {
+        "lat": payload.lat, 
+        "lon": payload.lon, 
+        "timestamp": time.time()
+    }
     return {"status": "Location updated"}
+
+@app.get("/get_location/{user_id}")
+async def get_location(user_id: str):
+    # Serve the coordinates to track.html
+    loc = live_locations.get(user_id)
+    if loc:
+        return {"status": "success", "data": {"lat": loc["lat"], "lon": loc["lon"]}}
+    return {"status": "error", "message": "Location unavailable or tracking not started."}
 
 @app.post("/trigger_emergency")
 async def trigger_emergency(payload: EmergencyPayload, background_tasks: BackgroundTasks):
