@@ -141,6 +141,36 @@ async function sendTriage(type) {
     
     await emergencyPromise;
     
+    // BUG FIX 1: If the offline fallback triggered, STOP. Do not overwrite the screen with N/A.
+    if (document.getElementById('ai-suggestions').innerHTML.includes('OFFLINE SOS')) {
+        return; 
+    }
+
+    // BUG FIX 2: If the first fetch dropped, forcefully grab the map data now so it never says N/A
+    if (Object.keys(dispatchedServices).length === 0) {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const userId = urlParams.get('id');
+            let lat = null, lon = null;
+            
+            if (navigator.geolocation) {
+                const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {timeout: 5000}));
+                lat = pos.coords.latitude;
+                lon = pos.coords.longitude;
+            }
+            
+            let res = await fetch(`${API_BASE_URL}/trigger_emergency`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ user_id: userId, latitude: lat, longitude: lon })
+            });
+            let d = await res.json();
+            if (d.services) dispatchedServices = d.services;
+        } catch(e) {
+            console.log("Map retry failed.");
+        }
+    }
+    
     try {
         let response = await fetch(`${API_BASE_URL}/ai_triage`, {
             method: 'POST',
