@@ -62,13 +62,17 @@ def process_emergency_alerts(contacts, services, lat, lon, user_id):
     if valid_contacts and TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID:
         maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat else "Location unavailable"
         live_link = f"https://raksham-pi.vercel.app/track.html?id={user_id}"
+        
+        # EXTRACT BOTH HOSPITAL AND POLICE NAMES
         hosp_name = services.get('hospital', {}).get('name', 'Nearest Hospital')
+        police_name = services.get('police_station', {}).get('name', 'Local Police')
         
         alert_text = (
             f"🚨 RAKSHAM CRITICAL ALERT 🚨\n\n"
             f"📍 GPS Location: {maps_link}\n"
             f"📡 Live Tracking: {live_link}\n\n"
-            f"Nearest Hospital: {hosp_name}\n"
+            f"🏥 Hospital: {hosp_name}\n"
+            f"🚓 Police: {police_name}\n\n"
             f"⚠️ Immediate medical assistance is required!"
         )
         url = f"https://api.textbee.dev/api/v1/gateway/devices/{TEXTBEE_DEVICE_ID}/send-sms"
@@ -152,6 +156,7 @@ async def trigger_emergency(payload: EmergencyPayload, background_tasks: Backgro
         row = cursor.fetchone(); cursor.close(); conn.close()
         if row:
             contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']]
+            # Pass the services payload received from the frontend into the background task
             background_tasks.add_task(process_emergency_alerts, contacts, payload.services, payload.latitude, payload.longitude, payload.user_id)
     except: pass
     return {"status": "Emergency Triggered"}
