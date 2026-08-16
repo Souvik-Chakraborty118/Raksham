@@ -409,15 +409,13 @@ async function sendChatMessage() {
         chatOutput.innerHTML += `<div class="ai-msg"><b>Raksham AI:</b> ${escapeHtml(data.response)}</div>`;
         chatOutput.scrollTop = chatOutput.scrollHeight;
         
-        // 👉 ADD THIS EXACT LINE HERE TO MAKE IT SPEAK 👈
         speakText(data.response); 
         
         window.chatHistory.push({ role: 'assistant', content: data.response });
         if (window.chatHistory.length > 12) {
             window.chatHistory = window.chatHistory.slice(-12);
         }
-    }
-    } catch (error) {
+    } catch (error) { // <-- CORRECTED: Removed the extra bracket here
         console.error("Chat error:", error);
         const typingEl = document.getElementById(typingId);
         if (typingEl) typingEl.remove();
