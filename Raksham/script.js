@@ -76,7 +76,7 @@ function populateProfileDOM(data) {
     setInput('e-em4', data.em4); setInput('e-em5', data.em5); setInput('e-em6', data.em6);
 }
 
-// --- CLIENT SIDE MAP SCRAPING (BULLETPROOF GET REQUESTS) ---
+// --- CLIENT SIDE MAP SCRAPING (Fixed Global Bug & Android SMS Intent) ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -87,20 +87,19 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
 async function fetchFacilitiesClientSide(lat, lon) {
     let services = {
-        hospital: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Nearest Hospital</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@${lat},${lon},15z' target='_blank'>Get Directions</a>`, name: "Nearest Hospital", phone: "112" },
+        hospital: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Emergency Hospital</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@${lat},${lon},15z' target='_blank'>Get Directions</a>`, name: "Emergency Hospital", phone: "112" },
         police_station: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Local Police</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/search/police/@${lat},${lon},15z' target='_blank'>Get Directions</a>`, name: "Local Police", phone: "100" },
-        ambulance: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@${lat},${lon},15z' target='_blank'>Get Directions</a>`, name: "Ambulance", phone: "102" }
+        ambulance: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@${lat},${lon},15z' target='_blank'>Get Directions</a>`, name: "Ambulance Dispatch", phone: "102" }
     };
 
-    // 1. FAST OVERPASS QUERY (No Regex, 8km radius, GET request to bypass mobile browser CORS blocks)
-    const query = `[out:json][timeout:5];(way["amenity"="hospital"](around:8000,${lat},${lon});node["amenity"="hospital"](around:8000,${lat},${lon});way["amenity"="police"](around:8000,${lat},${lon});node["amenity"="police"](around:8000,${lat},${lon}););out center;`;
+    // Lightweight Overpass query strictly bounded to a 5km radius to prevent timeouts
+    const query = `[out:json][timeout:5];(nwr["amenity"~"hospital|clinic"](around:5000,${lat},${lon});nwr["healthcare"="hospital"](around:5000,${lat},${lon});nwr["amenity"="police"](around:5000,${lat},${lon}););out center;`;
     const encodedQuery = encodeURIComponent(query);
+    
     const mirrors = [
         `https://overpass-api.de/api/interpreter?data=${encodedQuery}`,
-        `https://lz4.overpass-api.de/api/interpreter?data=${encodedQuery}`
+        `https://overpass.kumi.systems/api/interpreter?data=${encodedQuery}`
     ];
-
-    let overpassSuccess = false;
 
     for (let url of mirrors) {
         try {
@@ -118,9 +117,10 @@ async function fetchFacilitiesClientSide(lat, lon) {
                     let dist = calculateDistance(lat, lon, el_lat, el_lon);
                     let item = { lat: el_lat, lon: el_lon, dist: dist, tags: el.tags || {} };
                     let am = item.tags.amenity || "";
+                    let hc = item.tags.healthcare || "";
                     
-                    if (am === "hospital") h_list.push(item);
-                    else if (am === "police") p_list.push(item);
+                    if (am.includes("hospital") || am.includes("clinic") || hc.includes("hospital")) h_list.push(item);
+                    else if (am.includes("police")) p_list.push(item);
                 });
 
                 function getBest(arr, defName, defPhone) {
@@ -130,41 +130,20 @@ async function fetchFacilitiesClientSide(lat, lon) {
                     let n = best.tags.name || best.tags.operator || defName;
                     let p = best.tags.phone || best.tags['contact:phone'] || defPhone;
                     
-                    // Notice: We route directly to the exact destination coordinates, NOT a search query.
                     return { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${n}</span><br>📍 Distance: <strong>${best.dist.toFixed(1)} km</strong><br>📞 <a href='tel:${p}' style='color:#FF003C;'>${p}</a><br>🗺️ <a href='https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${best.lat},${best.lon}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: n, phone: p };
                 }
 
-                let h = getBest(h_list, "Nearest Hospital", "112");
-                let p = getBest(p_list, "Nearest Police", "100");
+                let h = getBest(h_list, "Local Hospital", "112");
+                let p = getBest(p_list, "Local Police", "100");
 
                 if(h) services.hospital = h;
                 if(p) services.police_station = p;
-                overpassSuccess = true;
-                break;
+                break; // Stop looping mirrors once we get successful data
             }
-        } catch (e) { console.warn("Overpass Mirror failed", e); }
+        } catch (e) { 
+            console.warn("Overpass Mirror failed, trying next..."); 
+        }
     }
-
-    // 2. BACKUP API (If Overpass completely fails, we hit OSM Geocoding directly)
-    if (!overpassSuccess || services.hospital.name === "Nearest Hospital") {
-        try {
-            let nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=hospital&lat=${lat}&lon=${lon}&limit=1`);
-            let nomData = await nomRes.json();
-            if (nomData && nomData.length > 0) {
-                let hLat = nomData[0].lat;
-                let hLon = nomData[0].lon;
-                let hName = nomData[0].name || "Local Medical Center";
-                let dist = calculateDistance(lat, lon, hLat, hLon);
-                
-                services.hospital = {
-                    html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${hName}</span><br>📍 Distance: <strong>${dist.toFixed(1)} km</strong><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${hLat},${hLon}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`,
-                    name: hName,
-                    phone: "112"
-                };
-            }
-        } catch(e) { console.warn("Nominatim fallback failed"); }
-    }
-
     return services;
 }
 
@@ -213,21 +192,24 @@ async function sendTriage(emergencyType) {
         let services = await fetchFacilitiesClientSide(lat, lon);
         window.lastDispatchedServices = services;
 
-        const hospName = services.hospital.name;
-        const hospPhone = services.hospital.phone;
-        const polPhone = services.police_station.phone;
-        const ambPhone = services.ambulance.phone;
-        const gpsLink = `https://maps.google.com/?q=${lat},${lon}`;
+        // Clean numbers to prevent Android SMS Intent crashes
+        const hospPhone = services.hospital.phone.replace(/[^0-9+]/g, '');
+        const polPhone = services.police_station.phone.replace(/[^0-9+]/g, '');
+        const ambPhone = services.ambulance.phone.replace(/[^0-9+]/g, '');
         
-        const allPhones = [...new Set([hospPhone, polPhone, ambPhone])].join(';');
+        const gpsLink = `https://maps.google.com/?q=${lat},${lon}`;
+        const smsBodyText = encodeURIComponent(`URGENT EMERGENCY! Please send immediate help to my location: ${gpsLink}`);
+        
+        // FIX: Android SMS intent requires Commas, not Semicolons
+        const allPhones = [...new Set([hospPhone, polPhone, ambPhone])].filter(Boolean).join(',');
         
         const smsActionDiv = document.getElementById('sms-action-buttons');
         if (smsActionDiv) {
             smsActionDiv.innerHTML = `
-                <a href="sms:${allPhones}?body=URGENT EMERGENCY! Please send immediate help to my location: ${gpsLink}" class="btn" style="display:block; text-align:center; background-color:#28a745; color:white; border-radius:12px; margin-bottom: 10px; font-weight:bold; padding: 15px; text-decoration:none; box-shadow: 0 4px 10px rgba(40, 167, 69, 0.4);">
-                    🟢 SMS ALL LOCAL AUTHORITIES
+                <a href="sms:${allPhones}?body=${smsBodyText}" class="btn" style="display:block; text-align:center; background-color:#28a745; color:white; border-radius:12px; margin-bottom: 10px; font-weight:bold; padding: 15px; text-decoration:none; box-shadow: 0 4px 10px rgba(40, 167, 69, 0.4);">
+                    🟢 SMS ALL AUTHORITIES (HOSPITAL, POLICE)
                 </a>
-                <a href="sms:112?body=URGENT EMERGENCY! Please send help. My exact location: ${gpsLink}" class="btn" style="display:block; text-align:center; background-color:#ff9800; color:white; border-radius:12px; margin-bottom: 20px; font-weight:bold; padding: 15px; text-decoration:none; box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);">
+                <a href="sms:112?body=${smsBodyText}" class="btn" style="display:block; text-align:center; background-color:#ff9800; color:white; border-radius:12px; margin-bottom: 20px; font-weight:bold; padding: 15px; text-decoration:none; box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);">
                     🚨 SMS 112 DISPATCH
                 </a>
             `;
