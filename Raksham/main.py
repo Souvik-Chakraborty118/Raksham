@@ -1,17 +1,3 @@
-# =========================================================
-# REQUIRED ONE-TIME DB MIGRATION (run once on your Postgres instance):
-#
-#   ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_report_image TEXT;
-#   ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_summary TEXT;
-#   ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_summary_updated_at TIMESTAMP;
-#   ALTER TABLE users ADD COLUMN IF NOT EXISTS show_medical_summary BOOLEAN DEFAULT true;
-#
-# REQUIRED render.com ENV VAR:
-#   GROQ_API_KEY = <your Groq API key>
-#
-# REQUIRED requirements.txt ADDITION:
-#   httpx
-# =========================================================
 import os
 import math
 import time
