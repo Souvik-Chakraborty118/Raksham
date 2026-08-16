@@ -218,6 +218,26 @@ async function sendTriage(emergencyType) {
 
         // 🔧 FIX: store dispatched services globally so the chatbot can reference them later
         window.lastDispatchedServices = triggerData.services || {};
+        // START LIVE GPS TRACKING FOR FIRST RESPONDERS
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(async (pos) => {
+                try {
+                    await fetch(`${API_BASE_URL}/update_location`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            user_id: userId, 
+                            lat: pos.coords.latitude, 
+                            lon: pos.coords.longitude 
+                        })
+                    });
+                } catch (e) {
+                    console.error("Live tracking update failed", e);
+                }
+            }, (err) => {
+                console.warn("Live tracking lost:", err);
+            }, { enableHighAccuracy: true, maximumAge: 0 });
+        }
 
         // Get AI Medical Guidance based on situation
         let triageRes = await fetch(`${API_BASE_URL}/ai_triage`, {
