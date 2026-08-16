@@ -76,13 +76,26 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 def fetch_facility(tag_key, tag_value, lat, lon):
     overpass_url = "http://overpass-api.de/api/interpreter"
     
-    # Catch both hospitals and major clinics
+    # Expanded query for Hospitals
     if tag_value == "hospital":
         query = f"""
         [out:json][timeout:10];
         (
           nwr["amenity"="hospital"](around:8000,{lat},{lon});
           nwr["healthcare"="hospital"](around:8000,{lat},{lon});
+          nwr["amenity"="clinic"](around:5000,{lat},{lon});
+        );
+        out center;
+        """
+    # Expanded query for Police Stations (Includes outposts, local stations, and booths)
+    elif tag_value == "police":
+        query = f"""
+        [out:json][timeout:10];
+        (
+          nwr["amenity"="police"](around:8000,{lat},{lon});
+          nwr["police"](around:8000,{lat},{lon});
+          nwr["amenity"="police_booth"](around:5000,{lat},{lon});
+          nwr["government"="police"](around:8000,{lat},{lon});
         );
         out center;
         """
@@ -94,19 +107,19 @@ def fetch_facility(tag_key, tag_value, lat, lon):
         """
         
     try:
-        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/5.0"}, timeout=10)
+        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/5.1"}, timeout=10)
         elements = response.json().get('elements', [])
         
         if not elements:
             return None
             
-        # Calculate mathematical distance for every facility
         valid_facilities = []
         for el in elements:
+            # Handle both node points and center coordinates for boundaries
             el_lat = el.get('lat') or el.get('center', {}).get('lat')
             el_lon = el.get('lon') or el.get('center', {}).get('lon')
             
-            if el_lat and el_lon:
+            if el_lat is not None and el_lon is not None:
                 dist = calculate_distance(lat, lon, el_lat, el_lon)
                 el['calculated_dist'] = dist
                 el['exact_lat'] = el_lat
@@ -116,18 +129,17 @@ def fetch_facility(tag_key, tag_value, lat, lon):
         if not valid_facilities:
             return None
             
-        # Sort by distance (lowest distance to highest distance)
+        # Sort by distance in ascending order
         valid_facilities.sort(key=lambda x: x['calculated_dist'])
         
-        # The closest facility is guaranteed to be [0]
         closest_facility = valid_facilities[0] 
-        
         tags = closest_facility.get('tags', {})
-        name = tags.get('name', f'Nearest {tag_value.replace("_", " ").title()}')
+        
+        name = tags.get('name') or tags.get('operator') or f'Nearest {tag_value.replace("_", " ").title()}'
         dist_km = closest_facility['calculated_dist']
         
-        # Find a phone number if available
-        phone = tags.get('phone') or tags.get('contact:phone') or '112'
+        # Look for explicit contact numbers
+        phone = tags.get('phone') or tags.get('contact:phone') or ('100' if tag_value == 'police' else '112')
         
         maps_link = f"https://www.google.com/maps/dir/?api=1&origin={lat},{lon}&destination={closest_facility['exact_lat']},{closest_facility['exact_lon']}"
         
