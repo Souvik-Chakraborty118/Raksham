@@ -80,85 +80,83 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     return R * c
 
 # --- MAP SCRAPING WITH DISTANCE SORTING ---
-def fetch_facility(tag_key, tag_value, lat, lon):
+def fetch_facility(lat, lon):
     overpass_url = "http://overpass-api.de/api/interpreter"
     
-    # Expanded query for Hospitals
-    if tag_value == "hospital":
-        query = f"""
-        [out:json][timeout:10];
-        (
-          nwr["amenity"="hospital"](around:8000,{lat},{lon});
-          nwr["healthcare"="hospital"](around:8000,{lat},{lon});
-          nwr["amenity"="clinic"](around:5000,{lat},{lon});
-        );
-        out center;
-        """
-    # Expanded query for Police Stations (Includes outposts, local stations, and booths)
-    elif tag_value == "police":
-        query = f"""
-        [out:json][timeout:10];
-        (
-          nwr["amenity"="police"](around:8000,{lat},{lon});
-          nwr["police"](around:8000,{lat},{lon});
-          nwr["amenity"="police_booth"](around:5000,{lat},{lon});
-          nwr["government"="police"](around:8000,{lat},{lon});
-        );
-        out center;
-        """
-    else:
-        query = f"""
-        [out:json][timeout:10];
-        nwr["{tag_key}"="{tag_value}"](around:8000,{lat},{lon});
-        out center;
-        """
-        
+    # Combined query to fetch hospital, police, and ambulance all at once in 1 HTTP request
+    query = f"""
+    [out:json][timeout:6];
+    (
+      nwr["amenity"="hospital"](around:10000,{lat},{lon});
+      nwr["healthcare"="hospital"](around:10000,{lat},{lon});
+      nwr["amenity"="police"](around:10000,{lat},{lon});
+      nwr["amenity"="ambulance_station"](around:10000,{lat},{lon});
+    );
+    out center;
+    """
+    
+    services = {}
     try:
-        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/5.1"}, timeout=10)
+        response = requests.post(overpass_url, data={'data': query}, headers={"User-Agent": "RakshamApp/5.1"}, timeout=7)
         elements = response.json().get('elements', [])
         
         if not elements:
-            return None
-            
-        valid_facilities = []
+            return services
+
+        # Separate and sort categories locally
+        hospitals, police, ambulances = [], [], []
+
         for el in elements:
-            # Handle both node points and center coordinates for boundaries
             el_lat = el.get('lat') or el.get('center', {}).get('lat')
             el_lon = el.get('lon') or el.get('center', {}).get('lon')
-            
-            if el_lat is not None and el_lon is not None:
-                dist = calculate_distance(lat, lon, el_lat, el_lon)
-                el['calculated_dist'] = dist
-                el['exact_lat'] = el_lat
-                el['exact_lon'] = el_lon
-                valid_facilities.append(el)
+            if el_lat is None or el_lon is None:
+                continue
                 
-        if not valid_facilities:
-            return None
+            dist = calculate_distance(lat, lon, el_lat, el_lon)
+            el['calculated_dist'] = dist
+            el['exact_lat'] = el_lat
+            el['exact_lon'] = el_lon
             
-        # Sort by distance in ascending order
-        valid_facilities.sort(key=lambda x: x['calculated_dist'])
-        
-        closest_facility = valid_facilities[0] 
-        tags = closest_facility.get('tags', {})
-        
-        name = tags.get('name') or tags.get('operator') or f'Nearest {tag_value.replace("_", " ").title()}'
-        dist_km = closest_facility['calculated_dist']
-        
-        # Look for explicit contact numbers
-        phone = tags.get('phone') or tags.get('contact:phone') or ('100' if tag_value == 'police' else '112')
-        
-        maps_link = f"https://www.google.com/maps/dir/?api=1&origin={lat},{lon}&destination={closest_facility['exact_lat']},{closest_facility['exact_lon']}"
-        
-        return {
-            "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>{name}</span><br>📍 Distance: <strong>{dist_km:.1f} km</strong><br>📞 <a href='tel:{phone}' style='color:#FF003C;'>{phone}</a><br>🗺️ <a href='{maps_link}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
-            "name": name,
-            "phone": phone
-        }
-        
+            tags = el.get('tags', {})
+            amenity = tags.get('amenity', '')
+            healthcare = tags.get('healthcare', '')
+
+            if amenity == 'hospital' or healthcare == 'hospital':
+                hospitals.append(el)
+            elif amenity == 'police':
+                police.append(el)
+            elif 'ambulance' in amenity:
+                ambulances.append(el)
+
+        # Helper to process the closest item
+        def process_closest(arr, key_name, default_phone):
+            if not arr: return None
+            arr.sort(key=lambda x: x['calculated_dist'])
+            best = arr[0]
+            tags = best.get('tags', {})
+            name = tags.get('name') or tags.get('operator') or f'Nearest {key_name.title()}'
+            dist_km = best['calculated_dist']
+            phone = tags.get('phone') or tags.get('contact:phone') or default_phone
+            maps_link = f"https://www.google.com/maps/dir/?api=1&origin={lat},{lon}&destination={best['exact_lat']},{best['exact_lon']}"
+            
+            return {
+                "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>{name}</span><br>📍 Distance: <strong>{dist_km:.1f} km</strong><br>📞 <a href='tel:{phone}' style='color:#FF003C;'>{phone}</a><br>🗺️ <a href='{maps_link}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
+                "name": name,
+                "phone": phone
+            }
+
+        hosp = process_closest(hospitals, "hospital", "112")
+        pol = process_closest(police, "police station", "100")
+        amb = process_closest(ambulances, "ambulance", "102")
+
+        if hosp: services["hospital"] = hosp
+        if pol: services["police_station"] = pol
+        if amb: services["ambulance"] = amb
+
     except Exception as e:
         print(f"Overpass Error: {e}")
-        return None
+        
+    return services
 
 # --- SMS TO EMERGENCY CONTACTS ONLY (WhatsApp Removed) ---
 def process_emergency_alerts(contacts, services, lat, lon, user_id):
@@ -287,13 +285,7 @@ async def update_location(payload: LocationUpdate):
 async def trigger_emergency(payload: EmergencyPayload, background_tasks: BackgroundTasks):
     services = {}
     if payload.latitude and payload.longitude:
-        hosp = fetch_facility("amenity", "hospital", payload.latitude, payload.longitude)
-        pol = fetch_facility("amenity", "police", payload.latitude, payload.longitude)
-        amb = fetch_facility("amenity", "ambulance_station", payload.latitude, payload.longitude)
-        
-        if hosp: services["hospital"] = hosp
-        if pol: services["police_station"] = pol
-        if amb: services["ambulance"] = amb
+        services = fetch_facility(payload.latitude, payload.longitude)
 
     try:
         conn = get_db_connection()
