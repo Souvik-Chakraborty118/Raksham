@@ -312,16 +312,10 @@ async def trigger_emergency(payload: EmergencyPayload, background_tasks: Backgro
 async def ai_triage(payload: TriagePayload):
     dispatched = payload.services or {}
     
-    # Bulletproof fallbacks: If map data is completely empty, use standard emergency dispatch
-    default_hospital = {
-        "html": "<span style='color:#333; font-weight:bold; font-size:16px;'>Emergency Medical Center</span><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a>"
-    }
-    default_police = {
-        "html": "<span style='color:#333; font-weight:bold; font-size:16px;'>Police Control Room</span><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a>"
-    }
-    default_ambulance = {
-        "html": "<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a>"
-    }
+    # Fallbacks in case GPS completely fails
+    default_hospital = {"html": "<span style='color:#333; font-weight:bold; font-size:16px;'>Emergency Medical Center</span><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a>"}
+    default_police = {"html": "<span style='color:#333; font-weight:bold; font-size:16px;'>Police Control Room</span><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a>"}
+    default_ambulance = {"html": "<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a>"}
 
     hospital_html = dispatched.get('hospital', {}).get('html') or default_hospital['html']
     police_html = dispatched.get('police_station', {}).get('html') or default_police['html']
@@ -331,11 +325,50 @@ async def ai_triage(payload: TriagePayload):
         f"<strong>🏥 Nearest Hospital:</strong><br>{hospital_html}",
         f"<strong>🚓 Nearest Police:</strong><br>{police_html}",
         f"<strong>🚑 Nearest Ambulance:</strong><br>{ambulance_html}",
-        "<br><strong style='color:#FF003C;'>IMMEDIATE ACTIONS:</strong>",
-        "1. Do not leave the victim unattended.",
-        "2. Keep them breathing and conscious."
+        "<br><strong style='color:#FF003C;'>IMMEDIATE ACTIONS:</strong>"
     ]
 
+    # --- DYNAMIC MEDICAL SUGGESTIONS BASED ON SITUATION ---
+    situation = (payload.type or "").lower()
+    
+    if "heart" in situation or "cardiac" in situation:
+        guidance.extend([
+            "1. Have the person sit down, rest, and try to keep calm.",
+            "2. Loosen any tight clothing.",
+            "3. Ask if they take chest pain medicine (like nitroglycerin) and help them take it.",
+            "4. If unresponsive and not breathing, begin CPR immediately."
+        ])
+    elif "accident" in situation or "crash" in situation or "trauma" in situation:
+        guidance.extend([
+            "1. DO NOT move the victim unless they are in immediate life-threatening danger (e.g., fire).",
+            "2. Apply firm, direct pressure to any bleeding wounds with a clean cloth.",
+            "3. Keep the victim's head and neck perfectly still.",
+            "4. Keep them warm with a coat or blanket to prevent shock."
+        ])
+    elif "chok" in situation:
+        guidance.extend([
+            "1. Ask 'Are you choking?' If they cannot cough, speak, or breathe, act immediately.",
+            "2. Give 5 back blows between the shoulder blades with the heel of your hand.",
+            "3. Give 5 abdominal thrusts (Heimlich maneuver).",
+            "4. Alternate blows and thrusts until the blockage is dislodged."
+        ])
+    elif "burn" in situation or "fire" in situation:
+        guidance.extend([
+            "1. Stop the burning process. Extinguish flames.",
+            "2. Cool the burn IMMEDIATELY with cool (not ice-cold) running water for at least 10 minutes.",
+            "3. Remove restrictive items (rings, watches) near the burn area before it swells.",
+            "4. Loosely cover the burn with a sterile, non-fluffy dressing or plastic wrap."
+        ])
+    else:
+        # Generic Severe Medical Fallback
+        guidance.extend([
+            "1. Check the victim's airway, breathing, and circulation (ABCs).",
+            "2. Do not leave the victim unattended.",
+            "3. Keep them breathing and conscious.",
+            "4. If bleeding, apply direct pressure. If unresponsive, begin CPR."
+        ])
+
+    # ML Severity assessment
     if ai_model:
         try:
             input_features = np.zeros((1, ai_model.n_features_in_)) 
@@ -345,16 +378,3 @@ async def ai_triage(payload: TriagePayload):
             pass
 
     return {"status": "success", "suggestions": guidance}
-
-@app.post("/alert_authorities")
-async def alert_authorities(payload: AlertPayload):
-    return {"message": "Authorities have been notified with your live coordinates."}
-
-@app.post("/chat")
-async def chat(payload: ChatPayload):
-    # Basic static fallback for the AI chatbot. 
-    return {"reply": "I am the Raksham Emergency AI. Please follow the triage steps and wait for emergency services to arrive."}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
