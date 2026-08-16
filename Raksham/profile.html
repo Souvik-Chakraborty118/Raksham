@@ -65,6 +65,20 @@
             <input type="tel" id="e-em6" placeholder="Em Contact 6">
             
             <button class="btn btn-neon" onclick="saveProfile()" style="margin-top: 20px;">GENERATE NEW TAG</button>
+
+            <hr style="margin: 25px 0;">
+            <h3 style="color:#FF003C;">Medical Report (AI Summarized)</h3>
+            <p class="report-upload-note">Upload a photo of a medical report. Raksham AI will extract key info (conditions, medications, allergies) and show it to anyone who scans your emergency tag.</p>
+            <div class="file-input-wrapper">
+                <input type="file" id="e-report-upload" accept="image/*">
+            </div>
+            <button class="btn btn-dark" onclick="uploadMedicalReport()">Upload & Summarize Report</button>
+            <div id="report-summary-preview" class="report-summary-preview"></div>
+
+            <label class="toggle-row">
+                <input type="checkbox" id="e-show-summary" checked onchange="setMedicalVisibility(this.checked)">
+                Show this summary to anyone who scans my QR code
+            </label>
         </div>
     </div>
 
