@@ -8,6 +8,7 @@ import psycopg2
 import numpy as np
 import joblib
 import uuid
+import concurrent.futures
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -44,6 +45,9 @@ except Exception as e:
 
 # --- IN-MEMORY LIVE TRACKING ---
 live_locations = {}
+
+# --- THREAD POOL FOR SAFE MAP SCRAPING ---
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
 
 # --- PYDANTIC MODELS ---
 class NewUser(BaseModel):
@@ -95,29 +99,41 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-# --- LIGHTNING FAST MAP SCRAPING (3.5s Timeout + Bulletproof Fallback) ---
+# --- BULLETPROOF MAP SCRAPING (Requests + ThreadPool) ---
+OVERPASS_MIRRORS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.openstreetmap.ru/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://z.overpass-api.de/api/interpreter"
+]
+
+def _sync_fetch(url, query):
+    resp = requests.post(url, data={'data': query}, headers={"User-Agent": "RakshamApp/7.0"}, timeout=5.0)
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get('elements'):
+        raise ValueError("empty")
+    return data
+
 async def fetch_facility(lat, lon):
-    # 1. ALWAYS initialize the fallback first so the UI NEVER shows generic empty numbers
+    # 1. ALWAYS initialize the fallback first
     services = {
         "hospital": {
             "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>Nearest Hospital (GPS Search)</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@{lat},{lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
-            "name": "Nearest Hospital (GPS)",
-            "phone": "112"
+            "name": "Nearest Hospital (GPS)", "phone": "112"
         },
         "police_station": {
             "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>Local Police (GPS Search)</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/search/police/@{lat},{lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
-            "name": "Local Police (GPS)",
-            "phone": "100"
+            "name": "Local Police (GPS)", "phone": "100"
         },
         "ambulance": {
             "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@{lat},{lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
-            "name": "Ambulance Dispatch",
-            "phone": "102"
+            "name": "Ambulance Dispatch", "phone": "102"
         }
     }
 
     query = f"""
-    [out:json][timeout:3];
+    [out:json][timeout:4];
     (
       node["amenity"~"hospital|clinic"](around:15000,{lat},{lon});
       way["amenity"~"hospital|clinic"](around:15000,{lat},{lon});
@@ -127,57 +143,61 @@ async def fetch_facility(lat, lon):
     out center;
     """
 
+    loop = asyncio.get_running_loop()
+    tasks = [loop.run_in_executor(executor, _sync_fetch, url, query) for url in OVERPASS_MIRRORS]
+    
     try:
-        # Standard client. Strict 3.5s timeout. No weird bindings.
-        async with httpx.AsyncClient() as client:
-            resp = await client.post("https://overpass-api.de/api/interpreter", data={'data': query}, timeout=3.5)
-            if resp.status_code == 200:
-                elements = resp.json().get('elements', [])
-                if elements:
-                    hospitals, police, ambulances = [], [], []
-                    for el in elements:
-                        el_lat = el.get('lat') or el.get('center', {}).get('lat')
-                        el_lon = el.get('lon') or el.get('center', {}).get('lon')
-                        if not el_lat or not el_lon: continue
-                            
-                        dist = calculate_distance(lat, lon, el_lat, el_lon)
-                        el['calculated_dist'] = dist
-                        el['exact_lat'], el['exact_lon'] = el_lat, el_lon
-                        
-                        am = el.get('tags', {}).get('amenity', '')
-                        hc = el.get('tags', {}).get('healthcare', '')
+        done, pending = await asyncio.wait(tasks, timeout=6.0, return_when=asyncio.FIRST_COMPLETED)
+        result_data = None
+        for t in done:
+            try:
+                res = t.result()
+                if res and res.get('elements'):
+                    result_data = res
+                    break
+            except:
+                continue
+                
+        if result_data:
+            elements = result_data['elements']
+            hospitals, police, ambulances = [], [], []
+            for el in elements:
+                el_lat = el.get('lat') or el.get('center', {}).get('lat')
+                el_lon = el.get('lon') or el.get('center', {}).get('lon')
+                if not el_lat or not el_lon: continue
+                    
+                el['calculated_dist'] = calculate_distance(lat, lon, el_lat, el_lon)
+                el['exact_lat'], el['exact_lon'] = el_lat, el_lon
+                
+                am = el.get('tags', {}).get('amenity', '')
+                hc = el.get('tags', {}).get('healthcare', '')
 
-                        if 'hospital' in am or 'clinic' in am or 'hospital' in hc:
-                            hospitals.append(el)
-                        elif 'police' in am:
-                            police.append(el)
-                        elif 'ambulance' in am:
-                            ambulances.append(el)
+                if 'hospital' in am or 'clinic' in am or 'hospital' in hc: hospitals.append(el)
+                elif 'police' in am: police.append(el)
+                elif 'ambulance' in am: ambulances.append(el)
 
-                    def get_best(arr, default_name, default_phone):
-                        if not arr: return None
-                        arr.sort(key=lambda x: x['calculated_dist'])
-                        best = arr[0]
-                        t = best.get('tags', {})
-                        n = t.get('name') or t.get('operator') or default_name
-                        p = t.get('phone') or t.get('contact:phone') or default_phone
-                        mlink = f"https://www.google.com/maps/dir/?api=1&origin={lat},{lon}&destination={best['exact_lat']},{best['exact_lon']}"
-                        return {
-                            "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>{n}</span><br>📍 Distance: <strong>{best['calculated_dist']:.1f} km</strong><br>📞 <a href='tel:{p}' style='color:#FF003C;'>{p}</a><br>🗺️ <a href='{mlink}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
-                            "name": n,
-                            "phone": p
-                        }
+            def get_best(arr, default_name, default_phone):
+                if not arr: return None
+                arr.sort(key=lambda x: x['calculated_dist'])
+                best = arr[0]
+                t = best.get('tags', {})
+                n = t.get('name') or t.get('operator') or default_name
+                p = t.get('phone') or t.get('contact:phone') or default_phone
+                mlink = f"https://www.google.com/maps/dir/?api=1&origin={lat},{lon}&destination={best['exact_lat']},{best['exact_lon']}"
+                return {
+                    "html": f"<span style='color:#333; font-weight:bold; font-size:16px;'>{n}</span><br>📍 Distance: <strong>{best['calculated_dist']:.1f} km</strong><br>📞 <a href='tel:{p}' style='color:#FF003C;'>{p}</a><br>🗺️ <a href='{mlink}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>",
+                    "name": n, "phone": p
+                }
 
-                    h = get_best(hospitals, "Nearest Hospital", "112")
-                    p = get_best(police, "Nearest Police", "100")
-                    a = get_best(ambulances, "Nearest Ambulance", "102")
+            h = get_best(hospitals, "Nearest Hospital", "112")
+            p = get_best(police, "Nearest Police", "100")
+            a = get_best(ambulances, "Nearest Ambulance", "102")
 
-                    # If successful, overwrite the fallbacks with real mapped facilities
-                    if h: services["hospital"] = h
-                    if p: services["police_station"] = p
-                    if a: services["ambulance"] = a
+            if h: services["hospital"] = h
+            if p: services["police_station"] = p
+            if a: services["ambulance"] = a
     except Exception as e:
-        print(f"Overpass skipped, using guaranteed Google Maps fallback: {e}")
+        print(f"Scraper error: {e}")
         
     return services
 
@@ -190,7 +210,6 @@ def process_emergency_alerts(contacts, services, lat, lon, user_id):
     if valid_contacts and TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID:
         maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat else "Location unavailable"
         live_link = f"https://raksham-pi.vercel.app/track.html?id={user_id}"
-        
         hosp_name = services.get('hospital', {}).get('name', 'Nearest Hospital')
         
         alert_text = (
@@ -206,7 +225,7 @@ def process_emergency_alerts(contacts, services, lat, lon, user_id):
         try:
             requests.post(url, json=payload, headers=headers, timeout=5)
         except Exception as e:
-            print(f"SMS Gateway Error: {e}")
+            pass
 
 # --- ROUTES ---
 @app.post("/register")
@@ -302,7 +321,6 @@ async def update_profile(user: UpdateUser):
 
 @app.post("/update_location")
 async def update_location(payload: LocationUpdate):
-    # Live tracking URL pushes hit this rapidly to keep memory updated
     live_locations[payload.user_id] = {
         "lat": payload.lat, 
         "lon": payload.lon, 
@@ -320,8 +338,6 @@ async def get_location(user_id: str):
 @app.post("/trigger_emergency")
 async def trigger_emergency(payload: EmergencyPayload, background_tasks: BackgroundTasks):
     services = {}
-    
-    # 1. Immediately look up DB contacts so SMS is ready to fire
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -332,11 +348,9 @@ async def trigger_emergency(payload: EmergencyPayload, background_tasks: Backgro
     except:
         row = None
 
-    # 2. Get map data (Max 3.5 seconds)
     if payload.latitude is not None and payload.longitude is not None:
         services = await fetch_facility(payload.latitude, payload.longitude)
 
-    # 3. Fire the SMS instantly in the background with the location and hospital name
     if row:
         contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']]
         background_tasks.add_task(process_emergency_alerts, contacts, services, payload.latitude, payload.longitude, payload.user_id)
@@ -399,7 +413,7 @@ async def chat_endpoint(payload: ChatPayload):
     context_note = f"Currently dispatched nearest hospital: {hosp_name}."
     
     if not GROQ_API_KEY:
-        return {"response": f"AI chat is not configured on the server (missing GROQ_API_KEY). For immediate help, head to {hosp_name} or call 112."}
+        return {"response": f"AI chat is not configured on the server. For immediate help, head to {hosp_name} or call 112."}
         
     messages = [{"role": "system", "content": CHAT_SYSTEM_PROMPT + "\n" + context_note}]
     
@@ -423,7 +437,6 @@ async def chat_endpoint(payload: ChatPayload):
             data = resp.json()
             reply = data["choices"][0]["message"]["content"]
     except Exception as e:
-        print(f"Groq chat error: {e}")
         reply = f"I'm having trouble connecting right now. If this is urgent, call 112 immediately or head to {hosp_name}."
         
     return {"response": reply}
@@ -431,7 +444,7 @@ async def chat_endpoint(payload: ChatPayload):
 @app.post("/upload_medical_report")
 async def upload_medical_report(payload: MedicalReportPayload):
     if not GROQ_API_KEY:
-        return {"error": "AI summarization is not configured on the server (missing GROQ_API_KEY)."}
+        return {"error": "AI summarization is not configured."}
     summary = None
     try:
         async with httpx.AsyncClient() as client:
