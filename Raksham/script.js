@@ -251,6 +251,13 @@ async function sendTriage(emergencyType) {
     });
         lat = position.coords.latitude;
         lon = position.coords.longitude;
+
+        // 👇 NEW: Inject GPS link directly into the 112 SMS Button
+        const smsBtn = document.getElementById('sms-112-btn');
+        if (smsBtn) {
+            smsBtn.href = `sms:112?body=URGENT EMERGENCY! Please send help. My exact location: https://maps.google.com/?q=${lat},${lon}`;
+        }
+
     } catch (error) {
         console.warn("GPS Failed:", error);
     }
@@ -317,7 +324,6 @@ async function sendTriage(emergencyType) {
     }
 }
 
-
 // =========================================================
 // 3. PROFILE MANAGEMENT (Profile.html Logic)
 // =========================================================
@@ -365,6 +371,7 @@ async function saveProfile() {
         alert("Failed to update profile. Please try again.");
     }
 }
+
 // 🔧 FIX: rolling chat history so the AI has conversational context
 window.chatHistory = window.chatHistory || [];
 
@@ -412,7 +419,7 @@ async function sendChatMessage() {
         if (window.chatHistory.length > 12) {
             window.chatHistory = window.chatHistory.slice(-12);
         }
-    } catch (error) { // <-- CORRECTED: Removed the extra bracket here
+    } catch (error) {
         console.error("Chat error:", error);
         const typingEl = document.getElementById(typingId);
         if (typingEl) typingEl.remove();
@@ -546,12 +553,12 @@ async function attemptLogin() {
     } catch (error) { 
          alert("Server error. Please try again."); 
     }
-} // <-- THIS BRACKET WAS MISSING
+}
 
 function logout() {
     localStorage.removeItem('raksham_user_email');
     window.location.href = 'login.html';
-} // <-- THIS BRACKET WAS ALSO MISSING
+}
 
 // Execute data fetching on page load
 window.onload = fetchAndDisplayData;
