@@ -193,7 +193,7 @@ async def register(user: NewUser):
         conn = get_db_connection()
         cursor = conn.cursor()
         user_id = str(uuid.uuid4())
-        qr_link = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://raksham-pi.vercel.app/profile.html?id={user_id}"
+        qr_link = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://raksham-pi.vercel.app/index.html?id={user_id}"
         
         clean_email = user.email.strip().lower()
         hashed_password = hash_password(user.password.strip()) # <-- WE HASH IT BEFORE SAVING
