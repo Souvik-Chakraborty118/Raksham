@@ -269,7 +269,37 @@ async function saveProfile() {
         alert("Failed to update profile. Please try again.");
     }
 }
+async function sendChatMessage() {
+    const inputField = document.getElementById('chat-input'); // Update to your chat input ID
+    const chatOutput = document.getElementById('chat-output'); // Update to your chat display ID
+    
+    if (!inputField || !chatOutput) return;
+    
+    const message = inputField.value.trim();
+    if (!message) return;
 
+    // Display user message in chat UI
+    chatOutput.innerHTML += `<div class="user-msg"><b>You:</b> ${message}</div>`;
+    inputField.value = "";
+
+    try {
+        let response = await fetch(`${API_BASE_URL}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                message: message, 
+                services: window.lastDispatchedServices || {} // Passes current hospital context if stored
+            })
+        });
+        let data = await response.json();
+        
+        // Display AI response in chat UI
+        chatOutput.innerHTML += `<div class="ai-msg"><b>Raksham AI:</b> ${data.response}</div>`;
+        chatOutput.scrollTop = chatOutput.scrollHeight;
+    } catch (error) {
+        console.error("Chat error:", error);
+    }
+}
 
 // =========================================================
 // 4. LOGIN LOGIC
