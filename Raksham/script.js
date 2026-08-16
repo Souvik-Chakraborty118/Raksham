@@ -242,7 +242,7 @@ async function sendTriage(emergencyType) {
         lat = position.coords.latitude; lon = position.coords.longitude;
     } catch (error) { console.warn("GPS Failed"); }
 
-    const urlParams = newSearchParams(window.location.search);
+    const urlParams = new URLSearchParams(window.location.search);
     const userId = urlParams.get('id') || "unknown_scan";
 
     if (lat) {
