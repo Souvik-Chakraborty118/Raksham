@@ -15,6 +15,9 @@ def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
 
 app = FastAPI()
+@app.get("/")
+async def root():
+    return {"status": "online", "message": "Raksham Emergency API is active and running"}
 
 app.add_middleware(
     CORSMiddleware,
