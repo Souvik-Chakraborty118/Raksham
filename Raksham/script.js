@@ -76,7 +76,7 @@ function populateProfileDOM(data) {
     setInput('e-em4', data.em4); setInput('e-em5', data.em5); setInput('e-em6', data.em6);
 }
 
-// --- CLIENT SIDE MAP SCRAPING (1.5 KM RADIUS STRICT) ---
+// --- CLIENT SIDE MAP SCRAPING ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -92,10 +92,9 @@ async function fetchFacilitiesClientSide(lat, lon) {
         ambulance: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@${lat},${lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: "Ambulance Dispatch", phone: "102" }
     };
 
-    // 1. Fast Overpass Query - Strict 1.5km (1500m) Radius
+    // 1. Fast Overpass Query
     const query = `[out:json][timeout:5];(nwr["amenity"~"hospital|clinic"](around:1500,${lat},${lon});nwr["healthcare"="hospital"](around:1500,${lat},${lon});nwr["amenity"="police"](around:1500,${lat},${lon}););out center;`;
     const encodedQuery = encodeURIComponent(query);
-    
     const mirrors = [
         `https://overpass-api.de/api/interpreter?data=${encodedQuery}`,
         `https://overpass.kumi.systems/api/interpreter?data=${encodedQuery}`
@@ -148,17 +147,18 @@ async function fetchFacilitiesClientSide(lat, lon) {
         }
     }
 
-    // 2. STRICTLY BOUNDED BACKUP API (Max ~1.5km limit)
+    // 2. STRICTLY BOUNDED BACKUP API
     if (!overpassSuccess || services.hospital.name === "Emergency Hospital") {
         try {
-            // 0.015 degrees is roughly 1.5 kilometers. It is impossible to search outside this box.
+            // ~1.5km search box to prevent searching far away
             let viewBox = `${lon-0.015},${lat+0.015},${lon+0.015},${lat-0.015}`;
             
-            let nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=hospital&viewbox=${viewBox}&bounded=1&limit=3`);
-            let nomData = await nomRes.json();
+            // Backup fetch for Hospital
+            let nomResHosp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=hospital&viewbox=${viewBox}&bounded=1&limit=3`);
+            let nomDataHosp = await nomResHosp.json();
             
-            if (nomData && nomData.length > 0) {
-                let bestNom = nomData[0];
+            if (nomDataHosp && nomDataHosp.length > 0) {
+                let bestNom = nomDataHosp[0];
                 let hLat = parseFloat(bestNom.lat);
                 let hLon = parseFloat(bestNom.lon);
                 
@@ -172,6 +172,25 @@ async function fetchFacilitiesClientSide(lat, lon) {
                     html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${hName}</span><br>📍 Distance: <strong>${dist.toFixed(1)} km</strong><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${hLat},${hLon}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`,
                     name: hName,
                     phone: "112"
+                };
+            }
+
+            // 👇 THE FIX: Backup fetch for Police Station 👇
+            let nomResPol = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=police&viewbox=${viewBox}&bounded=1&limit=3`);
+            let nomDataPol = await nomResPol.json();
+
+            if (nomDataPol && nomDataPol.length > 0) {
+                let bestPol = nomDataPol[0];
+                let pLat = parseFloat(bestPol.lat);
+                let pLon = parseFloat(bestPol.lon);
+                
+                let pName = bestPol.name || bestPol.display_name.split(',')[0];
+                let pDist = calculateDistance(lat, lon, pLat, pLon);
+                
+                services.police_station = {
+                    html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${pName}</span><br>📍 Distance: <strong>${pDist.toFixed(1)} km</strong><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${pLat},${pLon}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`,
+                    name: pName,
+                    phone: "100"
                 };
             }
         } catch(e) { console.warn("Backup API failed"); }
