@@ -76,7 +76,7 @@ function populateProfileDOM(data) {
     setInput('e-em4', data.em4); setInput('e-em5', data.em5); setInput('e-em6', data.em6);
 }
 
-// --- CLIENT SIDE MAP SCRAPING ---
+// --- CLIENT SIDE MAP SCRAPING (1.5 KM RADIUS STRICT) ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -92,12 +92,13 @@ async function fetchFacilitiesClientSide(lat, lon) {
         ambulance: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@${lat},${lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: "Ambulance Dispatch", phone: "102" }
     };
 
-    // 1. Fast Overpass Query
-    const query = `[out:json][timeout:5];(way["amenity"="hospital"](around:8000,${lat},${lon});node["amenity"="hospital"](around:8000,${lat},${lon});way["amenity"="police"](around:8000,${lat},${lon});node["amenity"="police"](around:8000,${lat},${lon}););out center;`;
+    // 1. Fast Overpass Query - Strict 1.5km (1500m) Radius
+    const query = `[out:json][timeout:5];(nwr["amenity"~"hospital|clinic"](around:1500,${lat},${lon});nwr["healthcare"="hospital"](around:1500,${lat},${lon});nwr["amenity"="police"](around:1500,${lat},${lon}););out center;`;
     const encodedQuery = encodeURIComponent(query);
+    
     const mirrors = [
         `https://overpass-api.de/api/interpreter?data=${encodedQuery}`,
-        `https://lz4.overpass-api.de/api/interpreter?data=${encodedQuery}`
+        `https://overpass.kumi.systems/api/interpreter?data=${encodedQuery}`
     ];
 
     let overpassSuccess = false;
@@ -118,9 +119,10 @@ async function fetchFacilitiesClientSide(lat, lon) {
                     let dist = calculateDistance(lat, lon, el_lat, el_lon);
                     let item = { lat: el_lat, lon: el_lon, dist: dist, tags: el.tags || {} };
                     let am = item.tags.amenity || "";
+                    let hc = item.tags.healthcare || "";
                     
-                    if (am === "hospital") h_list.push(item);
-                    else if (am === "police") p_list.push(item);
+                    if (am.includes("hospital") || am.includes("clinic") || hc.includes("hospital")) h_list.push(item);
+                    else if (am.includes("police")) p_list.push(item);
                 });
 
                 function getBest(arr, defName, defPhone) {
@@ -139,17 +141,18 @@ async function fetchFacilitiesClientSide(lat, lon) {
                 if(h) services.hospital = h;
                 if(p) services.police_station = p;
                 overpassSuccess = true;
-                break;
+                break; 
             }
-        } catch (e) { console.warn("Overpass Mirror failed"); }
+        } catch (e) { 
+            console.warn("Overpass Mirror failed, trying next..."); 
+        }
     }
 
-    // 2. STRICTLY BOUNDED BACKUP API
-    // If your phone blocks Overpass, this strictly searches an 8km cage around your GPS. It CANNOT jump to Spain.
+    // 2. STRICTLY BOUNDED BACKUP API (Max ~1.5km limit)
     if (!overpassSuccess || services.hospital.name === "Emergency Hospital") {
         try {
-            // Create an 8km bounding box around the victim's exact GPS coordinates
-            let viewBox = `${lon-0.08},${lat+0.08},${lon+0.08},${lat-0.08}`;
+            // 0.015 degrees is roughly 1.5 kilometers. It is impossible to search outside this box.
+            let viewBox = `${lon-0.015},${lat+0.015},${lon+0.015},${lat-0.015}`;
             
             let nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=hospital&viewbox=${viewBox}&bounded=1&limit=3`);
             let nomData = await nomRes.json();
@@ -159,7 +162,6 @@ async function fetchFacilitiesClientSide(lat, lon) {
                 let hLat = parseFloat(bestNom.lat);
                 let hLon = parseFloat(bestNom.lon);
                 
-                // Extract real hospital name
                 let rawName = bestNom.name || bestNom.display_name.split(',')[0];
                 let hName = rawName.replace(/(Hospital|Clinic).*$/i, '$1').trim(); 
                 if(hName.length < 3) hName = rawName;
@@ -397,7 +399,5 @@ async function setMedicalVisibility(showSummary) {
     if (!userEmail) return;
     try { await fetch(`${API_BASE_URL}/set_medical_visibility`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, show_medical_summary: showSummary }) }); } catch (error) {}
 }
-
-window.onload = fetchAndDisplayData;
 
 window.onload = fetchAndDisplayData;
