@@ -1,7 +1,3 @@
-// =========================================================
-// RAKSHAM APP - MAIN JAVASCRIPT
-// =========================================================
-
 const API_BASE_URL = "https://raksham-backend.onrender.com";
 
 const isProfilePage = window.location.pathname.includes('profile.html');
@@ -39,7 +35,6 @@ async function fetchAndDisplayData() {
         } catch (error) { console.error(error); }
     } else if (isProfilePage && !userEmail) window.location.href = 'login.html';
 }
-
 function populateIndexDOM(data) {
     const setText = (id, text) => { if (document.getElementById(id)) document.getElementById(id).innerText = text || "N/A"; };
     setText('profile-name', data.name); setText('profile-blood', data.blood_group);
@@ -76,7 +71,7 @@ function populateProfileDOM(data) {
     setInput('e-em4', data.em4); setInput('e-em5', data.em5); setInput('e-em6', data.em6);
 }
 
-// --- CLIENT SIDE MAP SCRAPING ---
+//CLIENT SIDE MAP 
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -92,17 +87,14 @@ async function fetchFacilitiesClientSide(lat, lon) {
         ambulance: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@${lat},${lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: "Ambulance Dispatch", phone: "102" }
     };
 
-    // 1. Fast Overpass Query - 1.5km for Hospitals, 3km for Police
+    //Fast Overpass Query - 1.5km for Hospitals, 3km for Police
     const query = `[out:json][timeout:5];(nwr["amenity"~"hospital|clinic"](around:1500,${lat},${lon});nwr["healthcare"="hospital"](around:1500,${lat},${lon});nwr["amenity"="police"](around:3000,${lat},${lon}););out center;`;
     const encodedQuery = encodeURIComponent(query);
-    
     const mirrors = [
         `https://overpass-api.de/api/interpreter?data=${encodedQuery}`,
         `https://overpass.kumi.systems/api/interpreter?data=${encodedQuery}`
     ];
-
     let overpassSuccess = false;
-
     for (let url of mirrors) {
         try {
             let res = await fetch(url, { method: "GET" });
@@ -147,10 +139,8 @@ async function fetchFacilitiesClientSide(lat, lon) {
             console.warn("Overpass Mirror failed, trying next..."); 
         }
     }
-
-    // 2. INDEPENDENT BACKUP APIS
-    
-    // Backup for Hospital (Strict ~1.5km limit)
+    //INDEPENDENT BACKUP APIS
+    //Backup for Hospital (Strict ~1.5km limit)
     if (services.hospital.name === "Emergency Hospital") {
         try {
             let viewBox = `${lon-0.015},${lat+0.015},${lon+0.015},${lat-0.015}`;
@@ -176,7 +166,7 @@ async function fetchFacilitiesClientSide(lat, lon) {
         } catch(e) { console.warn("Hospital Backup API failed"); }
     }
 
-    // Backup for Police Station (Strict ~3km limit)
+    //Backup for Police Station (Strict ~3km limit)
     if (services.police_station.name === "Local Police") {
         try {
             let viewBoxPol = `${lon-0.03},${lat+0.03},${lon+0.03},${lat-0.03}`;
@@ -288,7 +278,7 @@ async function sendTriage(emergencyType) {
     }
 }
 
-// --- VOICE & CHATBOT ---
+//VOICE CHATBOT
 function startVoiceRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert("Voice input is not supported in this browser.");
@@ -356,9 +346,20 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChatMessage(); });
 });
 
-// --- MENU & LOGIN ---
+//MENU LOGIN
 function openMenu() { document.getElementById('edit-menu').style.display = 'block'; }
 function closeMenu() { document.getElementById('edit-menu').style.display = 'none'; }
+//SHOW/HIDE PASSWORD FUNCTION 
+function togglePasswordVisibility(inputId) {
+    const passwordInput = document.getElementById(inputId);
+    if (passwordInput) {
+        if (passwordInput.type === "password") {
+            passwordInput.type = "text";
+        } else {
+            passwordInput.type = "password";
+        }
+    }
+}
 async function saveProfile() {
     const payload = {
         current_email: localStorage.getItem('raksham_user_email'),
@@ -389,7 +390,7 @@ async function attemptLogin() {
 }
 function logout() { localStorage.removeItem('raksham_user_email'); window.location.href = 'login.html'; }
 
-// --- MEDICAL REPORT ---
+//MEDICAL REPORT
 function resizeImageClientSide(file, maxWidth = 1200, quality = 0.7) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
