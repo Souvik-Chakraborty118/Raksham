@@ -196,7 +196,7 @@ async def chat_endpoint(payload: ChatPayload):
         if turn.role in ("user", "assistant") and turn.content: msgs.append({"role": turn.role, "content": turn.content})
     msgs.append({"role": "user", "content": payload.message})
     
-    #MULTI-KEY FALLBACK LOOP (Switched to Free-Tier Friendly 8B Model)
+    #MULTI-KEY FALLBACK LOOP (Switched to stable Qwen 3.6 27B model)
     last_error = ""
     for key in GROQ_KEYS_LIST:
         try:
@@ -204,7 +204,7 @@ async def chat_endpoint(payload: ChatPayload):
                 resp = await client.post(
                     "https://api.groq.com/openai/v1/chat/completions", 
                     headers={"Authorization": f"Bearer {key}"}, 
-                    json={"model": "llama-3.1-8b-instant", "messages": msgs, "temperature": 0.3, "max_tokens": 300}, 
+                    json={"model": "qwen/qwen3.6-27b", "messages": msgs, "temperature": 0.3, "max_tokens": 300}, 
                     timeout=15
                 )
                 if resp.status_code == 200:
@@ -232,7 +232,7 @@ async def upload_medical_report(payload: MedicalReportPayload):
                     "https://api.groq.com/openai/v1/chat/completions", 
                     headers={"Authorization": f"Bearer {key}"}, 
                     json={
-                        "model": "llama-3.2-11b-vision-preview", 
+                        "model": "qwen/qwen3.6-27b", 
                         "messages": [
                             {"role": "system", "content": "Extract ONLY clinical facts: diagnosed conditions, medications, allergies, warnings. Short bulleted list."}, 
                             {"role": "user", "content": [{"type": "text", "text": "Summarize this report."}, {"type": "image_url", "image_url": {"url": payload.image_base64}}]}
@@ -244,9 +244,10 @@ async def upload_medical_report(payload: MedicalReportPayload):
                 if resp.status_code == 200:
                     summary = resp.json()["choices"][0]["message"]["content"]
                     break
-                print(f"Groq Vision Key {key[:6]}... failed. Trying next key.")
+                else:
+                    print(f"Groq Vision Key failed -> Error {resp.status_code}: {resp.text}")
         except Exception as e:
-            print(f"Groq Vision Key {key[:6]}... threw an error. Trying next key.")
+            print(f"Groq Vision Exception -> {str(e)}")
             continue
 
     if not summary:
