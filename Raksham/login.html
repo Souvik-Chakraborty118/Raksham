@@ -16,6 +16,13 @@
         <div class="data-box">
             <input type="email" id="login-email" placeholder="Registered Email Address" required>
             <input type="password" id="login-password" placeholder="Password" required>
+            
+            <!-- SHOW PASSWORD TOGGLE -->
+            <div style="margin-top: 8px; margin-bottom: 15px; text-align: left; display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="show-login-pass" onclick="togglePasswordVisibility('login-password')" style="width: 16px; height: 16px; cursor: pointer;">
+                <label for="show-login-pass" style="font-size: 14px; color: #555; cursor: pointer;">Show Password</label>
+            </div>
+
             <button class="btn btn-neon" onclick="attemptLogin()">LOGIN TO PROFILE</button>
             
             <hr style="margin: 25px 0; border: 1px solid #f0f0f0;">
