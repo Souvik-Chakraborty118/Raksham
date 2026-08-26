@@ -204,7 +204,7 @@ async def chat_endpoint(payload: ChatPayload):
                 resp = await client.post(
                     "https://api.groq.com/openai/v1/chat/completions", 
                     headers={"Authorization": f"Bearer {key}"}, 
-                    json={"model": "llama3-8b-8192", "messages": msgs, "temperature": 0.3, "max_tokens": 300}, 
+                    json={"model": "llama-3.1-8b-instant", "messages": msgs, "temperature": 0.3, "max_tokens": 300}, 
                     timeout=15
                 )
                 if resp.status_code == 200:
