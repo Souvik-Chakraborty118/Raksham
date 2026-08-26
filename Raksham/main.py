@@ -196,24 +196,27 @@ async def chat_endpoint(payload: ChatPayload):
         if turn.role in ("user", "assistant") and turn.content: msgs.append({"role": turn.role, "content": turn.content})
     msgs.append({"role": "user", "content": payload.message})
     
-    # 🔄 MULTI-KEY FALLBACK LOOP
+    #MULTI-KEY FALLBACK LOOP (Switched to Free-Tier Friendly 8B Model)
+    last_error = ""
     for key in GROQ_KEYS_LIST:
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     "https://api.groq.com/openai/v1/chat/completions", 
                     headers={"Authorization": f"Bearer {key}"}, 
-                    json={"model": "llama-3.3-70b-versatile", "messages": msgs, "temperature": 0.3, "max_tokens": 300}, 
+                    json={"model": "llama3-8b-8192", "messages": msgs, "temperature": 0.3, "max_tokens": 300}, 
                     timeout=15
                 )
                 if resp.status_code == 200:
                     return {"response": resp.json()["choices"][0]["message"]["content"]}
-                print(f"Groq API Key {key[:6]}... failed. Trying next key.")
+                else:
+                    last_error = f"Error {resp.status_code}: {resp.text}"
+                    print(f"Groq API Key failed -> {last_error}")
         except Exception as e:
-            print(f"Groq API Key {key[:6]}... threw an error. Trying next key.")
+            last_error = str(e)
+            print(f"Groq Request Exception -> {last_error}")
             continue
             
-    # If every single key in the list fails
     return {"response": f"Connection issue. Call 112 or head to {hosp_name}."}
 
 @app.post("/upload_medical_report")
