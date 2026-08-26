@@ -53,6 +53,10 @@ class ChatPayload(BaseModel): message: str; services: dict = {}; history: List[C
 class MedicalReportPayload(BaseModel): email: str; image_base64: str
 class ProfileVisibilityPayload(BaseModel): email: str; show_medical_summary: bool
 
+# --- MULTI GROQ API KEY FALLBACK PARSER ---
+raw_groq_keys = os.getenv("GROQ_API_KEYS") or os.getenv("GROQ_API_KEY") or ""
+GROQ_KEYS_LIST = [k.strip() for k in raw_groq_keys.split(",") if k.strip()]
+
 # --- SMS TO EMERGENCY CONTACTS ---
 def process_emergency_alerts(contacts, services, lat, lon, user_id):
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
@@ -156,7 +160,6 @@ async def trigger_emergency(payload: EmergencyPayload, background_tasks: Backgro
         row = cursor.fetchone(); cursor.close(); conn.close()
         if row:
             contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']]
-            # Pass the services payload received from the frontend into the background task
             background_tasks.add_task(process_emergency_alerts, contacts, payload.services, payload.latitude, payload.longitude, payload.user_id)
     except: pass
     return {"status": "Emergency Triggered"}
@@ -183,32 +186,70 @@ async def ai_triage(payload: TriagePayload):
         except: pass
     return {"status": "success", "suggestions": guidance}
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
 @app.post("/chat")
 async def chat_endpoint(payload: ChatPayload):
     hosp_name = payload.services.get('hospital', {}).get('name', 'the nearest hospital')
-    if not GROQ_API_KEY: return {"response": f"AI missing. Head to {hosp_name} or call 112."}
+    if not GROQ_KEYS_LIST: return {"response": f"AI missing. Head to {hosp_name} or call 112."}
     
     msgs = [{"role": "system", "content": f"You are Raksham AI. Give short, direct, actionable first-aid guidance. Remind them to head to {hosp_name}."}]
     for turn in (payload.history or [])[-6:]:
         if turn.role in ("user", "assistant") and turn.content: msgs.append({"role": turn.role, "content": turn.content})
     msgs.append({"role": "user", "content": payload.message})
     
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post("https://api.groq.com/openai/v1/chat/completions", headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, json={"model": "llama-3.3-70b-versatile", "messages": msgs, "temperature": 0.3, "max_tokens": 300}, timeout=15)
-            return {"response": resp.json()["choices"][0]["message"]["content"]}
-    except: return {"response": f"Connection issue. Call 112 or head to {hosp_name}."}
+    # 🔄 MULTI-KEY FALLBACK LOOP
+    for key in GROQ_KEYS_LIST:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions", 
+                    headers={"Authorization": f"Bearer {key}"}, 
+                    json={"model": "llama-3.3-70b-versatile", "messages": msgs, "temperature": 0.3, "max_tokens": 300}, 
+                    timeout=15
+                )
+                if resp.status_code == 200:
+                    return {"response": resp.json()["choices"][0]["message"]["content"]}
+                print(f"Groq API Key {key[:6]}... failed. Trying next key.")
+        except Exception as e:
+            print(f"Groq API Key {key[:6]}... threw an error. Trying next key.")
+            continue
+            
+    # If every single key in the list fails
+    return {"response": f"Connection issue. Call 112 or head to {hosp_name}."}
 
 @app.post("/upload_medical_report")
 async def upload_medical_report(payload: MedicalReportPayload):
-    if not GROQ_API_KEY: return {"error": "AI missing."}
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post("https://api.groq.com/openai/v1/chat/completions", headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, json={"model": "llama-3.2-11b-vision-preview", "messages": [{"role": "system", "content": "Extract ONLY clinical facts: diagnosed conditions, medications, allergies, warnings. Short bulleted list."}, {"role": "user", "content": [{"type": "text", "text": "Summarize this report."}, {"type": "image_url", "image_url": {"url": payload.image_base64}}]}], "max_tokens": 250}, timeout=25)
-            summary = resp.json()["choices"][0]["message"]["content"]
+    if not GROQ_KEYS_LIST: return {"error": "AI missing."}
+    
+    summary = None
+    #MULTI-KEY FALLBACK LOOP FOR VISION MODEL
+    for key in GROQ_KEYS_LIST:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions", 
+                    headers={"Authorization": f"Bearer {key}"}, 
+                    json={
+                        "model": "llama-3.2-11b-vision-preview", 
+                        "messages": [
+                            {"role": "system", "content": "Extract ONLY clinical facts: diagnosed conditions, medications, allergies, warnings. Short bulleted list."}, 
+                            {"role": "user", "content": [{"type": "text", "text": "Summarize this report."}, {"type": "image_url", "image_url": {"url": payload.image_base64}}]}
+                        ], 
+                        "max_tokens": 250
+                    }, 
+                    timeout=25
+                )
+                if resp.status_code == 200:
+                    summary = resp.json()["choices"][0]["message"]["content"]
+                    break
+                print(f"Groq Vision Key {key[:6]}... failed. Trying next key.")
+        except Exception as e:
+            print(f"Groq Vision Key {key[:6]}... threw an error. Trying next key.")
+            continue
+
+    if not summary:
+        return {"error": "Could not analyze the report right now. All AI keys failed."}
         
+    try:
         conn = get_db_connection(); cursor = conn.cursor()
         cursor.execute("UPDATE users SET medical_report_image=%s, medical_summary=%s, medical_summary_updated_at=NOW() WHERE email=%s", (payload.image_base64, summary, payload.email))
         conn.commit(); cursor.close(); conn.close()
