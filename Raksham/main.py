@@ -196,7 +196,7 @@ async def chat_endpoint(payload: ChatPayload):
         if turn.role in ("user", "assistant") and turn.content: msgs.append({"role": turn.role, "content": turn.content})
     msgs.append({"role": "user", "content": payload.message})
     
-    #MULTI-KEY FALLBACK LOOP (Switched to stable Qwen 3.6 27B model)
+    # 🔄 MULTI-KEY FALLBACK LOOP
     last_error = ""
     for key in GROQ_KEYS_LIST:
         try:
@@ -204,11 +204,24 @@ async def chat_endpoint(payload: ChatPayload):
                 resp = await client.post(
                     "https://api.groq.com/openai/v1/chat/completions", 
                     headers={"Authorization": f"Bearer {key}"}, 
-                    json={"model": "qwen/qwen3.6-27b", "messages": msgs, "temperature": 0.3, "max_tokens": 300}, 
-                    timeout=15
+                    #INCREASED MAX_TOKENS TO 1500 SO IT CAN FINISH SPEAKING
+                    json={"model": "qwen/qwen3.6-27b", "messages": msgs, "temperature": 0.3, "max_tokens": 1500}, 
+                    timeout=20
                 )
                 if resp.status_code == 200:
-                    return {"response": resp.json()["choices"][0]["message"]["content"]}
+                    raw_text = resp.json()["choices"][0]["message"]["content"]
+                    
+                    # Strip out the internal thinking process
+                    if "</think>" in raw_text:
+                        clean_text = raw_text.split("</think>")[-1].strip()
+                    else:
+                        clean_text = raw_text.strip()
+                        
+                    # 👇 FAILSAFE: If it still returns blank, don't break the UI 👇
+                    if not clean_text:
+                        clean_text = f"I am analyzing the situation. Please immediately head to {hosp_name} while I process this."
+                        
+                    return {"response": clean_text}
                 else:
                     last_error = f"Error {resp.status_code}: {resp.text}"
                     print(f"Groq API Key failed -> {last_error}")
