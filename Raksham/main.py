@@ -57,7 +57,6 @@ class ProfileVisibilityPayload(BaseModel): email: str; show_medical_summary: boo
 raw_groq_keys = os.getenv("GROQ_API_KEYS") or os.getenv("GROQ_API_KEY") or ""
 GROQ_KEYS_LIST = [k.strip() for k in raw_groq_keys.split(",") if k.strip()]
 
-# --- SMS TO EMERGENCY CONTACTS ---
 def process_emergency_alerts(contacts, services, lat, lon, user_id):
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
     TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID")
