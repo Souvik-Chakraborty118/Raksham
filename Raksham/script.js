@@ -427,4 +427,79 @@ async function setMedicalVisibility(showSummary) {
     try { await fetch(`${API_BASE_URL}/set_medical_visibility`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, show_medical_summary: showSummary }) }); } catch (error) {}
 }
 
-window.onload = fetchAndDisplayData;
+function requestScanLocation(onSuccess) {
+  if (!("geolocation" in navigator)) {
+    alert("Geolocation is not supported on this device.");
+    return;
+  }
+  const showLocationOverlay = (isDenied = false) => {
+    if (document.getElementById("raksham-loc-overlay")) return;
+    const overlay = document.createElement("div");
+    overlay.id = "raksham-loc-overlay";
+    overlay.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;";
+    overlay.innerHTML = `
+      <div style="background:#fff;color:#111;max-width:360px;width:100%;border-radius:12px;padding:20px;text-align:center;font-family:sans-serif;">
+        <h3 style="margin:0 0 8px;color:#d32f2f;">Location Required for Rescue</h3>
+        <p style="font-size:14px;margin:0 0 16px;">
+          ${
+            isDenied
+              ? "Location access is currently blocked. Tap the settings icon in your browser address bar, set Location to Allow, then tap Retry."
+              : "Allow GPS access so Raksham can find the nearest hospital, police station, and share live rescue coordinates."
+          }
+        </p>
+        <button id="raksham-allow-loc-btn" style="background:#d32f2f;color:#fff;border:none;padding:12px 18px;border-radius:8px;font-weight:700;width:100%;cursor:pointer;">
+          ${isDenied ? "Retry Location Access" : "Allow Location Access"}
+        </button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    document.getElementById("raksham-allow-loc-btn").addEventListener("click", () => {
+      triggerGeo();
+    });
+  };
+  const removeOverlay = () => {
+    const el = document.getElementById("raksham-loc-overlay");
+    if (el) el.remove();
+  };
+  const triggerGeo = () => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        removeOverlay();
+        onSuccess(pos.coords.latitude, pos.coords.longitude);
+      },
+      (err) => {
+        showLocationOverlay(err.code === err.PERMISSION_DENIED);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+  if (navigator.permissions) {
+    navigator.permissions.query({ name: "geolocation" }).then((status) => {
+      if (status.state === "denied") {
+        showLocationOverlay(true);
+      } else if (status.state === "prompt") {
+        showLocationOverlay(false);
+        triggerGeo();
+      } else {
+        triggerGeo();
+      }
+    }).catch(() => triggerGeo());
+  } else {
+    showLocationOverlay(false);
+    triggerGeo();
+  }
+}
+window.onload= () => {
+  const params = new URLSearchParams(window.location.search);
+  const isTrackPage = window.location.pathname.includes("track.html");
+
+  if (params.has("id") && !isTrackPage) {
+    requestScanLocation(() => {
+      fetchAndDisplayData();
+    });
+  } else {
+    fetchAndDisplayData();
+  }
+};
