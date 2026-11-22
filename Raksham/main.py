@@ -7,31 +7,37 @@ import psycopg2
 import numpy as np
 import joblib
 import uuid
+import hashlib
+from typing import List
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from psycopg2.extras import RealDictCursor
-import hashlib
-from typing import List
 
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
-
 app = FastAPI()
-
 @app.get("/")
 async def root():
     return {"status": "online"}
+@app.get("/health")
+async def health():
+    return {"status": "alive"}
 
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
 def get_db_connection():
     return psycopg2.connect(os.getenv("DATABASE_URL"), cursor_factory=RealDictCursor)
 
-try: ai_model = joblib.load("models/multilingual_rf_model.pkl")
-except Exception: ai_model = None
+try:
+    ai_model = joblib.load("models/multilingual_rf_model.pkl")
+except Exception:
+    ai_model = None
 
 live_locations = {}
 
@@ -54,24 +60,48 @@ class MedicalReportPayload(BaseModel): email: str; image_base64: str
 class ProfileVisibilityPayload(BaseModel): email: str; show_medical_summary: bool
 
 # --- MULTI GROQ API KEY FALLBACK PARSER ---
-raw_groq_keys = os.getenv("GROQ_API_KEYS") or os.getenv("GROQ_API_KEY") or ""
-GROQ_KEYS_LIST = [k.strip() for k in raw_groq_keys.split(",") if k.strip()]
+def load_groq_keys() -> List[str]:
+    keys = []
+    for env_var in ("GROQ_API_KEYS", "GROQ_API_KEY", "GROQ_API_KEY_1", "GROQ_API_KEY_2"):
+        raw = os.getenv(env_var, "")
+        for k in raw.split(","):
+            k = k.strip()
+            if k and k not in keys:
+                keys.append(k)
+    return keys
 
-def process_emergency_alerts(contacts, services, lat, lon, user_id):
+GROQ_KEYS_LIST = load_groq_keys()
+
+CHAT_MODELS = [
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-120b",
+]
+VISION_MODEL = "qwen/qwen3.8-27b"
+
+def clean_llm_output(raw_text: str) -> str:
+    if not raw_text:
+        return ""
+    if "</think>" in raw_text:
+        return raw_text.split("</think>")[-1].strip()
+    return raw_text.strip()
+
+def process_emergency_alerts(contacts, services, lat, lon, user_id, victim_name="Unknown Victim", blood_group="N/A"):
     TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY")
     TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID")
     valid_contacts = [c for c in contacts if c and len(c) >= 5]
-    
+
     if valid_contacts and TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID:
-        maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat else "Location unavailable"
+        maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat is not None and lon is not None else "Location unavailable"
         live_link = f"https://raksham-pi.vercel.app/track.html?id={user_id}"
-        
-        # EXTRACT BOTH HOSPITAL AND POLICE NAMES
+
         hosp_name = services.get('hospital', {}).get('name', 'Nearest Hospital')
         police_name = services.get('police_station', {}).get('name', 'Local Police')
-        
+
         alert_text = (
             f"🚨 RAKSHAM CRITICAL ALERT 🚨\n\n"
+            f"👤 Victim: {victim_name}\n"
+            f"🩸 Blood Group: {blood_group}\n"
             f"📍 GPS Location: {maps_link}\n"
             f"📡 Live Tracking: {live_link}\n\n"
             f"🏥 Hospital: {hosp_name}\n"
@@ -80,9 +110,16 @@ def process_emergency_alerts(contacts, services, lat, lon, user_id):
         )
         url = f"https://api.textbee.dev/api/v1/gateway/devices/{TEXTBEE_DEVICE_ID}/send-sms"
         try:
-            requests.post(url, json={"recipients": valid_contacts, "message": alert_text}, headers={"x-api-key": TEXTBEE_API_KEY, "Content-Type": "application/json"}, timeout=5)
-        except Exception:
-            pass
+            resp = requests.post(
+                url,
+                json={"recipients": valid_contacts, "message": alert_text},
+                headers={"x-api-key": TEXTBEE_API_KEY, "Content-Type": "application/json"},
+                timeout=8,
+            )
+            if resp.status_code >= 400:
+                print(f"TextBee SMS failed ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            print(f"TextBee SMS exception: {e}")
 
 @app.post("/register")
 async def register(user: NewUser):
@@ -92,11 +129,14 @@ async def register(user: NewUser):
         user_id = str(uuid.uuid4())
         qr_link = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://raksham-pi.vercel.app/index.html?id={user_id}"
         hashed_password = hash_password(user.password.strip())
-        cursor.execute('INSERT INTO users (user_id, email, password, name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6, qr_image) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)', 
-                       (user_id, user.email.strip().lower(), hashed_password, user.name, user.blood_group, user.allergies, user.conditions, user.phone, user.em1, user.em2, user.em3, user.em4, user.em5, user.em6, qr_link))
+        cursor.execute(
+            'INSERT INTO users (user_id, email, password, name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6, qr_image) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+            (user_id, user.email.strip().lower(), hashed_password, user.name, user.blood_group, user.allergies, user.conditions, user.phone, user.em1, user.em2, user.em3, user.em4, user.em5, user.em6, qr_link)
+        )
         conn.commit(); cursor.close(); conn.close()
         return {"message": "User registered"}
-    except Exception as e: return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/login")
 async def login(user: LoginUser):
@@ -104,9 +144,11 @@ async def login(user: LoginUser):
         conn = get_db_connection(); cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE LOWER(TRIM(email)) = %s AND password = %s", (user.email.strip().lower(), hash_password(user.password.strip())))
         row = cursor.fetchone(); cursor.close(); conn.close()
-        if row: return {"message": "Login successful"}
+        if row:
+            return {"message": "Login successful"}
         return {"error": "Invalid email or password"}
-    except Exception as e: return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/retrieve_profile_data")
 async def retrieve_profile(req: ProfileRequest):
@@ -114,9 +156,11 @@ async def retrieve_profile(req: ProfileRequest):
         conn = get_db_connection(); cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE email = %s", (req.email,))
         row = cursor.fetchone(); cursor.close(); conn.close()
-        if row: return {"user_data": row, "qr_image": row.get('qr_image')}
+        if row:
+            return {"user_data": row, "qr_image": row.get('qr_image')}
         return {"error": "Not found"}
-    except Exception as e: return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/profile/{user_id}")
 async def get_public_profile(user_id: str):
@@ -125,20 +169,25 @@ async def get_public_profile(user_id: str):
         cursor.execute("SELECT name, blood_group, allergies, conditions, phone, em1, em2, em3, em4, em5, em6, medical_summary, show_medical_summary FROM users WHERE user_id = %s", (user_id,))
         row = cursor.fetchone(); cursor.close(); conn.close()
         if row:
-            if not row.get("show_medical_summary", True): row["medical_summary"] = None
+            if not row.get("show_medical_summary", True):
+                row["medical_summary"] = None
             return row
         return {"error": "Not found"}
-    except Exception as e: return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/update_profile")
 async def update_profile(user: UpdateUser):
     try:
         conn = get_db_connection(); cursor = conn.cursor()
-        cursor.execute('UPDATE users SET email=%s, name=%s, blood_group=%s, allergies=%s, conditions=%s, phone=%s, em1=%s, em2=%s, em3=%s, em4=%s, em5=%s, em6=%s WHERE email=%s', 
-                       (user.email, user.name, user.blood_group, user.allergies, user.conditions, user.phone, user.em1, user.em2, user.em3, user.em4, user.em5, user.em6, user.current_email))
+        cursor.execute(
+            'UPDATE users SET email=%s, name=%s, blood_group=%s, allergies=%s, conditions=%s, phone=%s, em1=%s, em2=%s, em3=%s, em4=%s, em5=%s, em6=%s WHERE email=%s',
+            (user.email, user.name, user.blood_group, user.allergies, user.conditions, user.phone, user.em1, user.em2, user.em3, user.em4, user.em5, user.em6, user.current_email)
+        )
         conn.commit(); cursor.close(); conn.close()
         return {"message": "Updated"}
-    except Exception as e: return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/update_location")
 async def update_location(payload: LocationUpdate):
@@ -148,19 +197,35 @@ async def update_location(payload: LocationUpdate):
 @app.get("/get_location/{user_id}")
 async def get_location(user_id: str):
     loc = live_locations.get(user_id)
-    if loc: return {"status": "success", "data": {"lat": loc["lat"], "lon": loc["lon"]}}
+    if loc:
+        return {"status": "success", "data": {"lat": loc["lat"], "lon": loc["lon"]}}
     return {"status": "error", "message": "Location unavailable."}
 
 @app.post("/trigger_emergency")
 async def trigger_emergency(payload: EmergencyPayload, background_tasks: BackgroundTasks):
     try:
         conn = get_db_connection(); cursor = conn.cursor()
-        cursor.execute("SELECT em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s", (payload.user_id,))
+        cursor.execute(
+            "SELECT name, blood_group, em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s",
+            (payload.user_id,)
+        )
         row = cursor.fetchone(); cursor.close(); conn.close()
         if row:
             contacts = [row['em1'], row['em2'], row['em3'], row['em4'], row['em5'], row['em6']]
-            background_tasks.add_task(process_emergency_alerts, contacts, payload.services, payload.latitude, payload.longitude, payload.user_id)
-    except: pass
+            victim_name = row.get('name') or "Unknown Victim"
+            blood_group = row.get('blood_group') or "N/A"
+            background_tasks.add_task(
+                process_emergency_alerts,
+                contacts,
+                payload.services,
+                payload.latitude,
+                payload.longitude,
+                payload.user_id,
+                victim_name,
+                blood_group
+            )
+    except Exception as e:
+        print(f"Trigger emergency error: {e}")
     return {"status": "Emergency Triggered"}
 
 @app.post("/ai_triage")
@@ -169,108 +234,128 @@ async def ai_triage(payload: TriagePayload):
     h = dispatched.get('hospital', {}).get('html', "N/A")
     p = dispatched.get('police_station', {}).get('html', "N/A")
     a = dispatched.get('ambulance', {}).get('html', "N/A")
-    
-    guidance = [f"<strong>🏥 {h}</strong><br>", f"<strong>🚓 {p}</strong><br>", f"<strong>🚑 {a}</strong><br>", "<br><strong style='color:#FF003C;'>IMMEDIATE ACTIONS:</strong>"]
+
+    guidance = [
+        f"<strong>🏥 {h}</strong><br>",
+        f"<strong>🚓 {p}</strong><br>",
+        f"<strong>🚑 {a}</strong><br>",
+        "<br><strong style='color:#FF003C;'>IMMEDIATE ACTIONS:</strong>"
+    ]
     situation = (payload.type or "").lower()
-    
-    if "heart" in situation: guidance.extend(["1. Have the person sit down, rest, and try to keep calm.", "2. Loosen any tight clothing.", "3. If unresponsive, begin CPR immediately."])
-    elif "accident" in situation: guidance.extend(["1. DO NOT move the victim unless they are in immediate danger.", "2. Apply firm, direct pressure to any bleeding wounds.", "3. Keep the victim's head perfectly still."])
-    elif "assault" in situation: guidance.extend(["1. Move to a safe location immediately.", "2. Apply direct pressure to stop bleeding.", "3. Wait for police and ambulance dispatch."])
-    else: guidance.extend(["1. Check airway, breathing, and circulation.", "2. Do not leave the victim unattended.", "3. Apply pressure to any bleeding."])
-        
+
+    if "heart" in situation:
+        guidance.extend(["1. Have the person sit down, rest, and try to keep calm.", "2. Loosen any tight clothing.", "3. If unresponsive, begin CPR immediately."])
+    elif "accident" in situation:
+        guidance.extend(["1. DO NOT move the victim unless they are in immediate danger.", "2. Apply firm, direct pressure to any bleeding wounds.", "3. Keep the victim's head perfectly still."])
+    elif "assault" in situation:
+        guidance.extend(["1. Move to a safe location immediately.", "2. Apply direct pressure to stop bleeding.", "3. Wait for police and ambulance dispatch."])
+    else:
+        guidance.extend(["1. Check airway, breathing, and circulation.", "2. Do not leave the victim unattended.", "3. Apply pressure to any bleeding."])
+
     if ai_model:
         try:
             prediction = ai_model.predict(np.zeros((1, ai_model.n_features_in_)))
             guidance.insert(0, f"<span style='color:#FF003C; font-weight:900;'>ML SEVERITY ASSESSMENT: LEVEL {str(prediction[0])}</span><br>")
-        except: pass
+        except Exception:
+            pass
     return {"status": "success", "suggestions": guidance}
 
 @app.post("/chat")
 async def chat_endpoint(payload: ChatPayload):
     hosp_name = payload.services.get('hospital', {}).get('name', 'the nearest hospital')
-    if not GROQ_KEYS_LIST: return {"response": f"AI missing. Head to {hosp_name} or call 112."}
-    
-    msgs = [{"role": "system", "content": f"You are Raksham AI. Give short, direct, actionable first-aid guidance. Remind them to head to {hosp_name}."}]
-    for turn in (payload.history or [])[-6:]:
-        if turn.role in ("user", "assistant") and turn.content: msgs.append({"role": turn.role, "content": turn.content})
-    msgs.append({"role": "user", "content": payload.message})
-    
-    # 🔄 MULTI-KEY FALLBACK LOOP
-    last_error = ""
-    for key in GROQ_KEYS_LIST:
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions", 
-                    headers={"Authorization": f"Bearer {key}"}, 
-                    #INCREASED MAX_TOKENS TO 1500 SO IT CAN FINISH SPEAKING
-                    json={"model": "qwen/qwen3.6-27b", "messages": msgs, "temperature": 0.3, "max_tokens": 1500}, 
-                    timeout=20
-                )
-                if resp.status_code == 200:
-                    raw_text = resp.json()["choices"][0]["message"]["content"]
-                    
-                    # Strip out the internal thinking process
-                    if "</think>" in raw_text:
-                        clean_text = raw_text.split("</think>")[-1].strip()
-                    else:
-                        clean_text = raw_text.strip()
-                        
-                    # 👇 FAILSAFE: If it still returns blank, don't break the UI 👇
-                    if not clean_text:
-                        clean_text = f"I am analyzing the situation. Please immediately head to {hosp_name} while I process this."
-                        
-                    return {"response": clean_text}
-                else:
-                    last_error = f"Error {resp.status_code}: {resp.text}"
-                    print(f"Groq API Key failed -> {last_error}")
-        except Exception as e:
-            last_error = str(e)
-            print(f"Groq Request Exception -> {last_error}")
-            continue
-            
-    return {"response": f"Connection issue. Call 112 or head to {hosp_name}."}
+    if not GROQ_KEYS_LIST:
+        return {"response": f"AI missing. Head to {hosp_name} or call 112."}
 
+    msgs = [{
+        "role": "system",
+        "content": (
+            f"You are Raksham AI, an emergency first-aid assistant. "
+            f"Give short, direct, step-by-step first-aid instructions in the same language the user writes in. "
+            f"Remind them to head to {hosp_name} or call 112 if critical."
+        )
+    }]
+    for turn in (payload.history or [])[-6:]:
+        if turn.role in ("user", "assistant") and turn.content:
+            msgs.append({"role": turn.role, "content": turn.content})
+    msgs.append({"role": "user", "content": payload.message})
+
+    # MULTI-MODEL + MULTI-KEY FALLBACK LOOP
+    async with httpx.AsyncClient(timeout=20) as client:
+        for model_name in CHAT_MODELS:
+            for key in GROQ_KEYS_LIST:
+                try:
+                    req_body = {
+                        "model": model_name,
+                        "messages": msgs,
+                        "temperature": 0.3,
+                        "max_tokens": 1000,
+                    }
+                    if model_name.startswith("qwen/"):
+                        req_body["reasoning_effort"] = "none"
+
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {key}"},
+                        json=req_body,
+                    )
+                    if resp.status_code == 200:
+                        raw_text = resp.json()["choices"][0]["message"].get("content", "")
+                        clean_text = clean_llm_output(raw_text)
+                        if not clean_text:
+                            clean_text = f"Stay calm and keep the victim stable. Head immediately to {hosp_name} or call 112."
+                        return {"response": clean_text}
+                    else:
+                        print(f"Groq Chat failed [{model_name}] -> {resp.status_code}: {resp.text}")
+                except Exception as e:
+                    print(f"Groq Chat Exception [{model_name}] -> {e}")
+                    continue
+
+    return {"response": f"Connection issue. Call 112 or head to {hosp_name}."}
 @app.post("/upload_medical_report")
 async def upload_medical_report(payload: MedicalReportPayload):
-    if not GROQ_KEYS_LIST: return {"error": "AI missing."}
-    
+    if not GROQ_KEYS_LIST:
+        return {"error": "AI missing."}
     summary = None
-    #MULTI-KEY FALLBACK LOOP FOR VISION MODEL
-    for key in GROQ_KEYS_LIST:
-        try:
-            async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=25) as client:
+        for key in GROQ_KEYS_LIST:
+            try:
                 resp = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions", 
-                    headers={"Authorization": f"Bearer {key}"}, 
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {key}"},
                     json={
-                        "model": "qwen/qwen3.6-27b", 
+                        "model": VISION_MODEL,
+                        "reasoning_effort": "none",
                         "messages": [
-                            {"role": "system", "content": "Extract ONLY clinical facts: diagnosed conditions, medications, allergies, warnings. Short bulleted list."}, 
-                            {"role": "user", "content": [{"type": "text", "text": "Summarize this report."}, {"type": "image_url", "image_url": {"url": payload.image_base64}}]}
-                        ], 
-                        "max_tokens": 250
-                    }, 
-                    timeout=25
+                            {"role": "system", "content": "Extract ONLY clinical facts: diagnosed conditions, medications, allergies, warnings. Short bulleted list."},
+                            {"role": "user", "content": [
+                                {"type": "text", "text": "Summarize this report."},
+                                {"type": "image_url", "image_url": {"url": payload.image_base64}}
+                            ]}
+                        ],
+                        "max_tokens": 600
+                    },
                 )
                 if resp.status_code == 200:
-                    summary = resp.json()["choices"][0]["message"]["content"]
-                    break
+                    raw = resp.json()["choices"][0]["message"].get("content", "")
+                    summary = clean_llm_output(raw)
+                    if summary:
+                        break
                 else:
-                    print(f"Groq Vision Key failed -> Error {resp.status_code}: {resp.text}")
-        except Exception as e:
-            print(f"Groq Vision Exception -> {str(e)}")
-            continue
+                    print(f"Groq Vision failed -> {resp.status_code}: {resp.text}")
+            except Exception as e:
+                print(f"Groq Vision Exception -> {e}")
+                continue
 
     if not summary:
         return {"error": "Could not analyze the report right now. All AI keys failed."}
-        
+
     try:
         conn = get_db_connection(); cursor = conn.cursor()
         cursor.execute("UPDATE users SET medical_report_image=%s, medical_summary=%s, medical_summary_updated_at=NOW() WHERE email=%s", (payload.image_base64, summary, payload.email))
         conn.commit(); cursor.close(); conn.close()
         return {"message": "Success", "summary": summary}
-    except Exception as e: return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/set_medical_visibility")
 async def set_medical_visibility(payload: ProfileVisibilityPayload):
@@ -279,4 +364,5 @@ async def set_medical_visibility(payload: ProfileVisibilityPayload):
         cursor.execute("UPDATE users SET show_medical_summary=%s WHERE email=%s", (payload.show_medical_summary, payload.email))
         conn.commit(); cursor.close(); conn.close()
         return {"message": "Visibility updated"}
-    except Exception as e: return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
