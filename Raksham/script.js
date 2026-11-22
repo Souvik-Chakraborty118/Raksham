@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://raksham-backend.onrender.com";
+const API_BASE_URL = "https://raksham-api-zdv4.onrender.com";
 
 const isProfilePage = window.location.pathname.includes('profile.html');
 const isIndexPage = window.location.pathname.includes('index.html') || window.location.pathname === '/' || window.location.pathname === '';
