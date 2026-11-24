@@ -1,0 +1,76 @@
+{
+  "metadata": {
+    "regions": ["Kharagpur", "Kolkata"],
+    "last_updated": "2026-11-24",
+    "national_fallbacks": {
+      "emergency": "112",
+      "ambulance": "108",
+      "police": "100"
+    },
+    "batch": 1,
+    "coverage_note": "Only entries whose contact details were read on an official page are included. lat/lon are null because no official or OSM-verified coordinates could be retrieved; fill them with enrich_coords.py before BallTree indexing."
+  },
+  "services": [
+    {
+      "id": "kgp_hosp_001",
+      "name": "B.C. Roy Technology Hospital, IIT Kharagpur",
+      "category": "hospital",
+      "sub_type": "campus_hospital",
+      "city": "Kharagpur",
+      "locality": "IIT Kharagpur Campus",
+      "address": "Scholars Avenue, opposite swimming pool, IIT Kharagpur Campus, Kharagpur 721302",
+      "lat": null,
+      "lon": null,
+      "landline": "03222-282632",
+      "landline_helpline": ["03222-281007", "03222-281008", "03222-281009"],
+      "sms_mobile": null,
+      "sms_capable": false,
+      "emergency_email": null,
+      "email_capable": false,
+      "open_24x7": null,
+      "google_maps_directions": null,
+      "osm_link": null,
+      "source_url": "https://hmc.iitkgp.ac.in/web/faqs/ ; https://international.iitkgp.ac.in/intl-students-visit-healthcare"
+    },
+    {
+      "id": "kgp_hosp_002",
+      "name": "Kharagpur Sub Divisional Hospital",
+      "category": "hospital",
+      "sub_type": "sub_divisional_hospital",
+      "city": "Kharagpur",
+      "locality": "Ward 27, Kharagpur Municipality",
+      "address": "Ward 27, Kharagpur Municipality, PS Kharagpur (Town), Paschim Medinipur, West Bengal (PIN not confirmed on the official listing)",
+      "lat": null,
+      "lon": null,
+      "landline": null,
+      "sms_mobile": "+919434061074",
+      "sms_capable": true,
+      "emergency_email": null,
+      "email_capable": false,
+      "open_24x7": null,
+      "google_maps_directions": null,
+      "osm_link": null,
+      "source_url": "https://paschimmedinipur.gov.in/public-utility-category/hospitals"
+    },
+    {
+      "id": "kgp_pol_001",
+      "name": "Kharagpur Local Police Station",
+      "category": "police_station",
+      "sub_type": "police_station",
+      "city": "Kharagpur",
+      "locality": "Inda",
+      "address": "Inda, near Inda Bus Stand, Kharagpur, Paschim Medinipur 721305",
+      "lat": null,
+      "lon": null,
+      "landline": "03222-227841",
+      "sms_mobile": "+919147888631",
+      "sms_capable": true,
+      "emergency_email": "pskgplocal@gmail.com",
+      "email_capable": true,
+      "open_24x7": true,
+      "google_maps_directions": null,
+      "osm_link": null,
+      "source_url": "https://paschimmdppolice.wb.gov.in/ps-detail/14"
+    }
+  ]
+}
