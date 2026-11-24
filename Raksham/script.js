@@ -491,6 +491,62 @@ function requestScanLocation(onSuccess) {
     triggerGeo();
   }
 }
+async function alertNearestAuthorities() {
+  const params = new URLSearchParams(window.location.search);
+  const userId = params.get("id");
+  const btn = document.getElementById("btn-alert-authorities");
+  const statusEl = document.getElementById("authority-dispatch-status");
+
+  if (!userId) return;
+
+  const confirmed = confirm(
+    "This will send live emergency SMS and email alerts to the nearest Hospital, Police Station, and Ambulance. Proceed?"
+  );
+  if (!confirmed) return;
+
+  btn.disabled = true;
+  btn.textContent = "Dispatching Alerts to Authorities...";
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/alert_authorities`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId,
+        latitude: window.currentScanLat ?? null,
+        longitude: window.currentScanLon ?? null,
+        services: window.currentRoutedServices || {}
+      })
+    });
+    const data = await resp.json();
+
+    if (data.status === "Authorities Alerted") {
+      btn.textContent = "✅ Authorities Alerted";
+      btn.style.background = "#2e7d32";
+
+      let lines = [];
+      if (data.sms_notified?.length) {
+        lines.push("SMS sent to: " + data.sms_notified.map(x => x.name).join(", "));
+      }
+      if (data.email_notified?.length) {
+        lines.push("Email sent to: " + data.email_notified.map(x => x.name).join(", "));
+      }
+      if (data.call_only?.length) {
+        lines.push(
+          "Direct call needed: " +
+          data.call_only.map(x => `${x.name} (<a href="tel:${x.phone}">${x.phone}</a>)`).join(", ")
+        );
+      }
+      statusEl.innerHTML = lines.join("<br>");
+    } else {
+      throw new Error(data.message || "Dispatch failed");
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "🚨 Retry Alerting Nearest Authorities";
+    statusEl.innerHTML = `<span style="color:#ff5252;">Could not alert authorities. Call 112 / 108 directly.</span>`;
+  }
+}
 window.onload= () => {
   const params = new URLSearchParams(window.location.search);
   const isTrackPage = window.location.pathname.includes("track.html");
