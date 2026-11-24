@@ -6,7 +6,7 @@
     <title>Raksham - Emergency Medical Tag</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="features.css?v=1">
+    <link rel="stylesheet" href="features.css?v=2">
 </head>
 <body>
     <div class="container">
@@ -107,7 +107,7 @@
             <img id="scene-photo-preview" class="scene-preview-img hidden" alt="Live Scene Preview">
 
             <div class="verify-actions">
-                <button type="button" id="btn-confirm-auth-dispatch" class="btn-confirm-dispatch" onclick="confirmAuthorityDispatch()" data-i18n="btn_confirm_dispatch">
+                <button type="button" id="btn-confirm-auth-dispatch" class="btn-confirm-dispatch" onclick="confirmAuthorityDispatch()" disabled data-i18n="btn_confirm_dispatch">
                     Confirm & Alert Authorities Now
                 </button>
                 <button type="button" class="btn-cancel-modal" onclick="closeAuthorityVerifyModal()" data-i18n="btn_close_modal">
@@ -117,6 +117,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=5"></script>
+    <script src="script.js?v=6"></script>
 </body>
 </html>

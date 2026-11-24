@@ -782,8 +782,10 @@ function openAuthorityVerifyModal() {
     window.capturedScenePhotoBase64 = null;
     const preview = document.getElementById("scene-photo-preview");
     const fileInput = document.getElementById("live-scene-camera");
+    const confirmBtn = document.getElementById("btn-confirm-auth-dispatch");
     if (preview) { preview.src = ""; preview.classList.add("hidden"); }
     if (fileInput) fileInput.value = "";
+    if (confirmBtn) confirmBtn.disabled = true;
     document.getElementById("authority-verify-modal")?.classList.remove("hidden");
 }
 
@@ -798,16 +800,22 @@ async function handleScenePhotoCapture(event) {
         const compressed = await resizeImageClientSide(file, 800, 0.6);
         window.capturedScenePhotoBase64 = compressed;
         const preview = document.getElementById("scene-photo-preview");
+        const confirmBtn = document.getElementById("btn-confirm-auth-dispatch");
         if (preview) {
             preview.src = compressed;
             preview.classList.remove("hidden");
         }
+        if (confirmBtn) confirmBtn.disabled = false;
     } catch (e) {
         console.warn("Could not compress scene photo:", e);
     }
 }
 
 async function confirmAuthorityDispatch() {
+    if (!window.capturedScenePhotoBase64) {
+        alert("Please snap a live camera photo first to verify this emergency.");
+        return;
+    }
     closeAuthorityVerifyModal();
     await alertNearestAuthorities(window.capturedScenePhotoBase64);
 }

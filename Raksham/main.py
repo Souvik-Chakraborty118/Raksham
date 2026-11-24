@@ -333,8 +333,9 @@ def dispatch_authority_alerts(
     victim: dict,
     scene_photo_base64: Optional[str] = None,
 ):
-    sender_email = os.getenv("SENDER_EMAIL")
-    sender_password = os.getenv("SENDER_PASSWORD")
+    email_webhook_url = (os.getenv("EMAIL_WEBHOOK_URL") or "").strip()
+    demo_phone = (os.getenv("DEMO_OVERRIDE_PHONE") or "").strip()
+    demo_email = (os.getenv("DEMO_OVERRIDE_EMAIL") or "").strip()
 
     sms_recipients = []
     email_recipients = []
@@ -348,6 +349,9 @@ def dispatch_authority_alerts(
         if addr and addr not in email_recipients:
             email_recipients.append(addr)
 
+    target_sms = [demo_phone] if demo_phone else sms_recipients
+    target_emails = [demo_email] if demo_email else email_recipients
+
     maps_link = (
         f"https://www.google.com/maps/dir/?api=1&destination={lat},{lon}&travelmode=driving"
         if lat is not None and lon is not None
@@ -357,7 +361,7 @@ def dispatch_authority_alerts(
     medical_summary = victim.get("medical_summary") if victim.get("show_medical_summary", True) else "Hidden by user"
     verified_tag = "YES (Live Scene Photo Attached)" if scene_photo_base64 else "No photo attached"
 
-    if sms_recipients:
+    if target_sms:
         auth_sms = (
             f"🚨 RAKSHAM EMERGENCY DISPATCH 🚨\n\n"
             f"👤 Victim: {victim.get('name') or 'Unknown'}\n"
@@ -368,9 +372,9 @@ def dispatch_authority_alerts(
             f"📡 Live Track: {live_link}\n"
             f"Requested via Raksham QR Emergency Alert."
         )
-        send_textbee_sms(sms_recipients, auth_sms)
+        send_textbee_sms(target_sms, auth_sms)
 
-    if email_recipients and sender_email and sender_password:
+    if target_emails and email_webhook_url:
         hosp = services.get("hospital") or {}
         pol = services.get("police_station") or {}
         amb = services.get("ambulance") or {}
@@ -393,33 +397,23 @@ def dispatch_authority_alerts(
             f"Police: {pol.get('name', 'N/A')} (ETA: {pol.get('eta_min', 'N/A')} min)\n"
             f"Ambulance: {amb.get('name', 'N/A')} (ETA: {amb.get('eta_min', 'N/A')} min)\n"
         )
-
-        msg = EmailMessage()
-        msg["Subject"] = f"RAKSHAM SOS DISPATCH: {victim.get('name', 'Victim')} ({victim.get('blood_group', 'N/A')})"
-        msg["From"] = sender_email
-        msg["To"] = ", ".join(email_recipients)
-        msg.set_content(body)
-
-        if scene_photo_base64 and "," in scene_photo_base64:
-            try:
-                _, b64_data = scene_photo_base64.split(",", 1)
-                img_bytes = base64.b64decode(b64_data)
-                msg.add_attachment(
-                    img_bytes,
-                    maintype="image",
-                    subtype="jpeg",
-                    filename="bystander_live_scene.jpg",
-                )
-            except Exception as e:
-                print(f"Scene photo attach failed: {e}")
+        if demo_email:
+            body += f"\n[DEMO MODE] Production targets: {', '.join(email_recipients)}\n"
 
         try:
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as smtp:
-                smtp.login(sender_email, sender_password)
-                smtp.send_message(msg)
-            print(f"Authority alert email dispatched to {email_recipients}")
+            resp = requests.post(
+                email_webhook_url,
+                json={
+                    "to": ", ".join(target_emails),
+                    "subject": f"RAKSHAM SOS DISPATCH: {victim.get('name', 'Victim')} ({victim.get('blood_group', 'N/A')})",
+                    "body": body,
+                    "photo_base64": scene_photo_base64,
+                },
+                timeout=15,
+            )
+            print(f"HTTPS email webhook response ({resp.status_code}): {resp.text}")
         except Exception as e:
-            print(f"SMTP authority email dispatch failed: {e}")
+            print(f"HTTPS email webhook dispatch failed: {e}")
 
 #ROUTES
 @app.post("/nearest_services")
@@ -601,7 +595,9 @@ async def victim_safe_killswitch(token: str, background_tasks: BackgroundTasks):
 
 @app.post("/alert_authorities")
 async def alert_authorities(payload: AuthorityAlertPayload, background_tasks: BackgroundTasks):
-    """Explicit opt-in dispatch with optional bystander live-camera verification photo."""
+    """Explicit opt-in dispatch requiring bystander live-camera verification photo."""
+    if not payload.scene_photo_base64:
+        return {"status": "error", "message": "Live camera scene photo is required before alerting authorities."}
     services = payload.services or {}
     if not services and payload.latitude is not None and payload.longitude is not None:
         services = await spatial_router.find_all_nearest(payload.latitude, payload.longitude)
