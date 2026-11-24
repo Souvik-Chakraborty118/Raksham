@@ -3,6 +3,12 @@ const API_BASE_URL = "https://raksham-api-zdv4.onrender.com";
 const isProfilePage = window.location.pathname.includes('profile.html');
 const isIndexPage = window.location.pathname.includes('index.html') || window.location.pathname === '/' || window.location.pathname === '';
 
+window.currentScanLat = null;
+window.currentScanLon = null;
+window.currentRoutedServices = null;
+window.lastDispatchedServices = null;
+window.routingPromise = null;
+
 async function fetchAndDisplayData() {
     const urlParams = new URLSearchParams(window.location.search);
     const emergencyId = urlParams.get('id');
@@ -14,7 +20,7 @@ async function fetchAndDisplayData() {
             let data = await response.json();
             if (!data.error) populateIndexDOM(data);
         } catch (error) { console.error(error); }
-    } 
+    }
     else if (isProfilePage && userEmail) {
         try {
             let response = await fetch(`${API_BASE_URL}/retrieve_profile_data`, {
@@ -35,6 +41,7 @@ async function fetchAndDisplayData() {
         } catch (error) { console.error(error); }
     } else if (isProfilePage && !userEmail) window.location.href = 'login.html';
 }
+
 function populateIndexDOM(data) {
     const setText = (id, text) => { if (document.getElementById(id)) document.getElementById(id).innerText = text || "N/A"; };
     setText('profile-name', data.name); setText('profile-blood', data.blood_group);
@@ -71,214 +78,191 @@ function populateProfileDOM(data) {
     setInput('e-em4', data.em4); setInput('e-em5', data.em5); setInput('e-em6', data.em6);
 }
 
-//CLIENT SIDE MAP 
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+// --- FAST BACKEND BALLTREE + OSRM ROUTER ---
+function buildFallbackServices(lat, lon) {
+    return {
+        hospital: {
+            name: "Emergency Hospital",
+            phone: "112",
+            html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Emergency Hospital</span><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@${lat},${lon},15z' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
+        },
+        police_station: {
+            name: "Local Police",
+            phone: "100",
+            html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Local Police</span><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/search/police/@${lat},${lon},15z' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
+        },
+        ambulance: {
+            name: "108 Emergency Ambulance",
+            phone: "108",
+            html: `<span style='color:#333; font-weight:bold; font-size:16px;'>108 Emergency Ambulance</span><br>📞 <a href='tel:108' style='color:#FF003C;'>108</a>`
+        }
+    };
 }
 
-async function fetchFacilitiesClientSide(lat, lon) {
-    let services = {
-        hospital: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Emergency Hospital</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@${lat},${lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: "Emergency Hospital", phone: "112" },
-        police_station: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Local Police</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/search/police/@${lat},${lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: "Local Police", phone: "100" },
-        ambulance: { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Ambulance Dispatch</span><br>📍 <strong style='color:green;'>Location Locked</strong><br>📞 <a href='tel:102' style='color:#FF003C;'>102</a><br>🗺️ <a href='https://www.google.com/maps/search/ambulance/@${lat},${lon},15z' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: "Ambulance Dispatch", phone: "102" }
+function normalizeBackendService(svc, defaultName, defaultPhone, lat, lon) {
+    if (!svc) {
+        return {
+            name: defaultName,
+            phone: defaultPhone,
+            html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${defaultName}</span><br>📞 <a href='tel:${defaultPhone}' style='color:#FF003C;'>${defaultPhone}</a>`
+        };
+    }
+    const phone = svc.sms_mobile || svc.landline || defaultPhone;
+    const distLine = svc.road_km != null
+        ? `📍 Road: <strong>${svc.road_km} km</strong>${svc.eta_min != null ? ` (~${svc.eta_min} min)` : ""}`
+        : `📍 <strong style='color:green;'>Location Locked</strong>`;
+    const dirUrl = svc.google_maps_directions || `https://www.google.com/maps/search/${encodeURIComponent(defaultName)}/@${lat},${lon},15z`;
+
+    return {
+        ...svc,
+        name: svc.name || defaultName,
+        phone: phone,
+        html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${svc.name || defaultName}</span><br>${distLine}<br>📞 <a href='tel:${phone}' style='color:#FF003C;'>${phone}</a><br>🗺️ <a href='${dirUrl}' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
     };
+}
 
-    //Fast Overpass Query - 1.5km for Hospitals, 3km for Police
-    const query = `[out:json][timeout:5];(nwr["amenity"~"hospital|clinic"](around:1500,${lat},${lon});nwr["healthcare"="hospital"](around:1500,${lat},${lon});nwr["amenity"="police"](around:3000,${lat},${lon}););out center;`;
-    const encodedQuery = encodeURIComponent(query);
-    const mirrors = [
-        `https://overpass-api.de/api/interpreter?data=${encodedQuery}`,
-        `https://overpass.kumi.systems/api/interpreter?data=${encodedQuery}`
-    ];
-    let overpassSuccess = false;
-    for (let url of mirrors) {
+function startPreRouting(lat, lon) {
+    if (window.routingPromise) return window.routingPromise;
+
+    window.routingPromise = (async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
         try {
-            let res = await fetch(url, { method: "GET" });
-            if (!res.ok) continue;
-            let data = await res.json();
-            
-            if (data && data.elements && data.elements.length > 0) {
-                let h_list = [], p_list = [];
-                data.elements.forEach(el => {
-                    let el_lat = el.lat || (el.center && el.center.lat);
-                    let el_lon = el.lon || (el.center && el.center.lon);
-                    if(!el_lat || !el_lon) return;
-                    
-                    let dist = calculateDistance(lat, lon, el_lat, el_lon);
-                    let item = { lat: el_lat, lon: el_lon, dist: dist, tags: el.tags || {} };
-                    let am = item.tags.amenity || "";
-                    let hc = item.tags.healthcare || "";
-                    
-                    if (am.includes("hospital") || am.includes("clinic") || hc.includes("hospital")) h_list.push(item);
-                    else if (am.includes("police")) p_list.push(item);
-                });
-
-                function getBest(arr, defName, defPhone) {
-                    if(!arr.length) return null;
-                    arr.sort((a, b) => a.dist - b.dist);
-                    let best = arr[0]; // This strictly chooses the absolutely closest 1 possible
-                    let n = best.tags.name || best.tags.operator || defName;
-                    let p = best.tags.phone || best.tags['contact:phone'] || defPhone;
-                    
-                    return { html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${n}</span><br>📍 Distance: <strong>${best.dist.toFixed(1)} km</strong><br>📞 <a href='tel:${p}' style='color:#FF003C;'>${p}</a><br>🗺️ <a href='https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${best.lat},${best.lon}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`, name: n, phone: p };
+            const res = await fetch(`${API_BASE_URL}/nearest_services`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lat, lon }),
+                signal: controller.signal
+            });
+            clearTimeout(timer);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === "success" && data.services) {
+                    const normalized = {
+                        hospital: normalizeBackendService(data.services.hospital, "Emergency Hospital", "112", lat, lon),
+                        police_station: normalizeBackendService(data.services.police_station, "Local Police", "100", lat, lon),
+                        ambulance: normalizeBackendService(data.services.ambulance, "108 Emergency Ambulance", "108", lat, lon)
+                    };
+                    window.currentRoutedServices = normalized;
+                    window.lastDispatchedServices = normalized;
+                    return normalized;
                 }
-
-                let h = getBest(h_list, "Local Hospital", "112");
-                let p = getBest(p_list, "Local Police", "100");
-
-                if(h) services.hospital = h;
-                if(p) services.police_station = p;
-                overpassSuccess = true;
-                break; 
             }
-        } catch (e) { 
-            console.warn("Overpass Mirror failed, trying next..."); 
+        } catch (e) {
+            clearTimeout(timer);
+            console.warn("Backend router timed out or failed, using instant helpline fallback.", e);
         }
-    }
-    //INDEPENDENT BACKUP APIS
-    //Backup for Hospital (Strict ~1.5km limit)
-    if (services.hospital.name === "Emergency Hospital") {
-        try {
-            let viewBox = `${lon-0.015},${lat+0.015},${lon+0.015},${lat-0.015}`;
-            let nomResHosp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=hospital&viewbox=${viewBox}&bounded=1&limit=3`);
-            let nomDataHosp = await nomResHosp.json();
-            
-            if (nomDataHosp && nomDataHosp.length > 0) {
-                let bestNom = nomDataHosp[0];
-                let hLat = parseFloat(bestNom.lat);
-                let hLon = parseFloat(bestNom.lon);
-                let rawName = bestNom.name || bestNom.display_name.split(',')[0];
-                let hName = rawName.replace(/(Hospital|Clinic).*$/i, '$1').trim(); 
-                if(hName.length < 3) hName = rawName;
-                
-                let dist = calculateDistance(lat, lon, hLat, hLon);
-                
-                services.hospital = {
-                    html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${hName}</span><br>📍 Distance: <strong>${dist.toFixed(1)} km</strong><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${hLat},${hLon}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`,
-                    name: hName,
-                    phone: "112"
-                };
-            }
-        } catch(e) { console.warn("Hospital Backup API failed"); }
-    }
+        const fallback = buildFallbackServices(lat, lon);
+        window.currentRoutedServices = fallback;
+        window.lastDispatchedServices = fallback;
+        return fallback;
+    })();
 
-    //Backup for Police Station (Strict ~3km limit)
-    if (services.police_station.name === "Local Police") {
-        try {
-            let viewBoxPol = `${lon-0.03},${lat+0.03},${lon+0.03},${lat-0.03}`;
-            let nomResPol = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=police+station&viewbox=${viewBoxPol}&bounded=1&limit=3`);
-            let nomDataPol = await nomResPol.json();
-
-            if (nomDataPol && nomDataPol.length > 0) {
-                let bestPol = nomDataPol[0];
-                let pLat = parseFloat(bestPol.lat);
-                let pLon = parseFloat(bestPol.lon);
-                
-                let rawName = bestPol.name || bestPol.display_name.split(',')[0];
-                let pName = rawName.replace(/(Police Station).*$/i, '$1').trim(); 
-                if(pName.length < 3) pName = rawName;
-                
-                let pDist = calculateDistance(lat, lon, pLat, pLon);
-                
-                services.police_station = {
-                    html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${pName}</span><br>📍 Distance: <strong>${pDist.toFixed(1)} km</strong><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${pLat},${pLon}' target='_blank' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`,
-                    name: pName,
-                    phone: "100"
-                };
-            }
-        } catch(e) { console.warn("Police Backup API failed"); }
-    }
-
-    return services;
+    return window.routingPromise;
 }
 
 let countdownInterval;
 function startCountdown() {
     document.getElementById('main-screen').style.display = 'none';
-    document.getElementById('countdown-screen').classList.remove('hidden'); document.getElementById('countdown-screen').style.display = 'block';
-    let timeLeft = 10; document.getElementById('timer-display').innerText = timeLeft;
+    document.getElementById('countdown-screen').classList.remove('hidden');
+    document.getElementById('countdown-screen').style.display = 'block';
+    let timeLeft = 10;
+    document.getElementById('timer-display').innerText = timeLeft;
     countdownInterval = setInterval(() => {
-        timeLeft--; document.getElementById('timer-display').innerText = timeLeft;
+        timeLeft--;
+        document.getElementById('timer-display').innerText = timeLeft;
         if (timeLeft <= 0) {
             clearInterval(countdownInterval);
             document.getElementById('countdown-screen').style.display = 'none';
-            document.getElementById('triage-screen').classList.remove('hidden'); document.getElementById('triage-screen').style.display = 'block';
+            document.getElementById('triage-screen').classList.remove('hidden');
+            document.getElementById('triage-screen').style.display = 'block';
         }
     }, 1000);
 }
 
 function cancelEmergency() {
     clearInterval(countdownInterval);
-    document.getElementById('countdown-screen').style.display = 'none'; document.getElementById('main-screen').style.display = 'block';
+    document.getElementById('countdown-screen').style.display = 'none';
+    document.getElementById('main-screen').style.display = 'block';
 }
 
 async function sendTriage(emergencyType) {
     document.getElementById('triage-screen').style.display = 'none';
-    document.getElementById('guidance-screen').classList.remove('hidden'); document.getElementById('guidance-screen').style.display = 'block';
-    
+    document.getElementById('guidance-screen').classList.remove('hidden');
+    document.getElementById('guidance-screen').style.display = 'block';
+
     const chatBox = document.getElementById('chat-box');
     if (chatBox) chatBox.style.display = 'block';
-    
+
     const outputDiv = document.getElementById('ai-suggestions');
-    outputDiv.innerHTML = "<span style='color:#333;'>Acquiring secure GPS lock...</span>";
-    
-    let lat = null, lon = null;
-    try {
-        const position = await new Promise((resolve, reject) => { navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }); });
-        lat = position.coords.latitude; lon = position.coords.longitude;
-    } catch (error) { console.warn("GPS Failed"); }
+    outputDiv.innerHTML = "<span style='color:#333;'>Loading nearest hospital, police & ambulance...</span>";
+
+    let lat = window.currentScanLat, lon = window.currentScanLon;
+    if (lat == null || lon == null) {
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+            });
+            lat = position.coords.latitude;
+            lon = position.coords.longitude;
+            window.currentScanLat = lat;
+            window.currentScanLon = lon;
+        } catch (error) { console.warn("GPS Failed"); }
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
     const userId = urlParams.get('id') || "unknown_scan";
 
-    if (lat) {
-        outputDiv.innerHTML = "<span style='color:green;'>GPS Locked! Fetching nearby hospitals...</span>";
-        
-        let services = await fetchFacilitiesClientSide(lat, lon);
-        window.lastDispatchedServices = services;
+    if (lat != null && lon != null) {
+        // Reuse pre-routed result (instant if already resolved during countdown)
+        const services = window.currentRoutedServices || await startPreRouting(lat, lon);
 
-        const hospPhone = services.hospital.phone.replace(/[^0-9+]/g, '');
-        const polPhone = services.police_station.phone.replace(/[^0-9+]/g, '');
-        const ambPhone = services.ambulance.phone.replace(/[^0-9+]/g, '');
-        
-        const gpsLink = `https://maps.google.com/?q=${lat},${lon}`;
-        const smsBodyText = encodeURIComponent(`URGENT EMERGENCY! Please send immediate help to my location: ${gpsLink}`);
-        
-        const allPhones = [...new Set([hospPhone, polPhone, ambPhone])].filter(Boolean).join(',');
-        
-        const smsActionDiv = document.getElementById('sms-action-buttons');
-        if (smsActionDiv) {
-            smsActionDiv.innerHTML = `
-                <a href="sms:${allPhones}?body=${smsBodyText}" class="btn" style="display:block; text-align:center; background-color:#28a745; color:white; border-radius:12px; margin-bottom: 10px; font-weight:bold; padding: 15px; text-decoration:none; box-shadow: 0 4px 10px rgba(40, 167, 69, 0.4);">
-                    🟢 SMS ALL AUTHORITIES (HOSPITAL, POLICE)
-                </a>
-                <a href="sms:112?body=${smsBodyText}" class="btn" style="display:block; text-align:center; background-color:#ff9800; color:white; border-radius:12px; margin-bottom: 20px; font-weight:bold; padding: 15px; text-decoration:none; box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);">
-                    🚨 SMS 112 DISPATCH
-                </a>
-            `;
-        }
+        // Render routed services immediately while triage text loads
+        outputDiv.innerHTML = [
+            `<strong>🏥 ${services.hospital.html}</strong>`,
+            `<strong>🚓 ${services.police_station.html}</strong>`,
+            `<strong>🚑 ${services.ambulance.html}</strong>`,
+            `<br><em style="color:#555;">Loading first-aid steps...</em>`
+        ].join("<br><br>");
 
-        fetch(`${API_BASE_URL}/trigger_emergency`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, latitude: lat, longitude: lon, services: services }) });
-        
+        // Fire family emergency contacts SMS in background
+        fetch(`${API_BASE_URL}/trigger_emergency`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, latitude: lat, longitude: lon, services: services })
+        }).catch(() => {});
+
         if (navigator.geolocation) {
-            navigator.geolocation.watchPosition(async (pos) => {
-                fetch(`${API_BASE_URL}/update_location`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, lat: pos.coords.latitude, lon: pos.coords.longitude }) });
-            }, () => {}, { enableHighAccuracy: true, maximumAge: 0 });
+            navigator.geolocation.watchPosition((pos) => {
+                window.currentScanLat = pos.coords.latitude;
+                window.currentScanLon = pos.coords.longitude;
+                fetch(`${API_BASE_URL}/update_location`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, lat: pos.coords.latitude, lon: pos.coords.longitude })
+                }).catch(() => {});
+            }, () => {}, { enableHighAccuracy: true, maximumAge: 10000 });
         }
 
-        let triageRes = await fetch(`${API_BASE_URL}/ai_triage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: emergencyType, services: services }) });
-        let triageData = await triageRes.json();
-        outputDiv.innerHTML = triageData.suggestions.join("<br><br>");
+        try {
+            let triageRes = await fetch(`${API_BASE_URL}/ai_triage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: emergencyType, services: services, latitude: lat, longitude: lon })
+            });
+            let triageData = await triageRes.json();
+            if (triageData.suggestions) {
+                outputDiv.innerHTML = triageData.suggestions.join("<br><br>");
+            }
+        } catch (e) {
+            console.warn("AI triage request failed:", e);
+        }
     } else {
-        outputDiv.innerHTML = "<span style='color:red;'>GPS denied. Cannot load map. Call 112.</span>";
+        outputDiv.innerHTML = "<span style='color:red;'>GPS denied. Enable location or call 112 immediately.</span>";
     }
 }
 
-//VOICE CHATBOT
+// VOICE CHATBOT
 function startVoiceRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert("Voice input is not supported in this browser.");
@@ -286,21 +270,21 @@ function startVoiceRecognition() {
     recognition.lang = 'en-IN'; recognition.interimResults = false;
     const micBtn = document.getElementById('mic-btn');
     const originalBg = micBtn.style.background;
-    micBtn.style.background = '#FF003C'; 
+    micBtn.style.background = '#FF003C';
     recognition.start();
     recognition.onresult = (event) => {
         document.getElementById('chat-input').value = event.results[0][0].transcript;
-        sendChatMessage(); 
+        sendChatMessage();
     };
     recognition.onend = () => { micBtn.style.background = originalBg; };
 }
 
 function speakText(text) {
     if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel(); 
+    window.speechSynthesis.cancel();
     const cleanText = text.replace(/<\/?[^>]+(>|$)/g, "").replace(/[*_#]/g, "");
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'en-IN'; utterance.rate = 1.05; 
+    utterance.lang = 'en-IN'; utterance.rate = 1.05;
     window.speechSynthesis.speak(utterance);
 }
 
@@ -323,13 +307,13 @@ async function sendChatMessage() {
     try {
         let response = await fetch(`${API_BASE_URL}/chat`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: message, services: window.lastDispatchedServices || {}, history: window.chatHistory.slice(-6) })
+            body: JSON.stringify({ message: message, services: window.lastDispatchedServices || window.currentRoutedServices || {}, history: window.chatHistory.slice(-6) })
         });
         let data = await response.json();
         document.getElementById(typingId)?.remove();
         chatOutput.innerHTML += `<div class="ai-msg"><b>Raksham AI:</b> ${escapeHtml(data.response)}</div>`;
         chatOutput.scrollTop = chatOutput.scrollHeight;
-        speakText(data.response); 
+        speakText(data.response);
         window.chatHistory.push({ role: 'assistant', content: data.response });
         if (window.chatHistory.length > 12) window.chatHistory = window.chatHistory.slice(-12);
     } catch (error) {
@@ -346,20 +330,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChatMessage(); });
 });
 
-//MENU LOGIN
+// MENU & AUTH
 function openMenu() { document.getElementById('edit-menu').style.display = 'block'; }
 function closeMenu() { document.getElementById('edit-menu').style.display = 'none'; }
-//SHOW/HIDE PASSWORD FUNCTION 
+
 function togglePasswordVisibility(inputId) {
     const passwordInput = document.getElementById(inputId);
     if (passwordInput) {
-        if (passwordInput.type === "password") {
-            passwordInput.type = "text";
-        } else {
-            passwordInput.type = "password";
-        }
+        passwordInput.type = passwordInput.type === "password" ? "text" : "password";
     }
 }
+
 async function saveProfile() {
     const payload = {
         current_email: localStorage.getItem('raksham_user_email'),
@@ -380,17 +361,17 @@ async function saveProfile() {
 async function attemptLogin() {
     const email = document.getElementById('login-email')?.value.trim().toLowerCase();
     const password = document.getElementById('login-password')?.value.trim();
-    if (!email || !password) return alert("Please enter both email and password."); 
+    if (!email || !password) return alert("Please enter both email and password.");
     try {
-        let response = await fetch(`${API_BASE_URL}/login`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email: email, password: password }) });
+        let response = await fetch(`${API_BASE_URL}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email, password: password }) });
         let data = await response.json();
-        if (data.error) alert(data.error); 
+        if (data.error) alert(data.error);
         else { localStorage.setItem('raksham_user_email', email); window.location.href = 'profile.html'; }
     } catch (error) { alert("Server error."); }
 }
 function logout() { localStorage.removeItem('raksham_user_email'); window.location.href = 'login.html'; }
 
-//MEDICAL REPORT
+// MEDICAL REPORT
 function resizeImageClientSide(file, maxWidth = 1200, quality = 0.7) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -427,135 +408,153 @@ async function setMedicalVisibility(showSummary) {
     try { await fetch(`${API_BASE_URL}/set_medical_visibility`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, show_medical_summary: showSummary }) }); } catch (error) {}
 }
 
+// --- SCAN LOCATION PROMPT ---
 function requestScanLocation(onSuccess) {
-  if (!("geolocation" in navigator)) {
-    alert("Geolocation is not supported on this device.");
-    return;
-  }
-  const showLocationOverlay = (isDenied = false) => {
-    if (document.getElementById("raksham-loc-overlay")) return;
-    const overlay = document.createElement("div");
-    overlay.id = "raksham-loc-overlay";
-    overlay.style.cssText =
-      "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;";
-    overlay.innerHTML = `
-      <div style="background:#fff;color:#111;max-width:360px;width:100%;border-radius:12px;padding:20px;text-align:center;font-family:sans-serif;">
-        <h3 style="margin:0 0 8px;color:#d32f2f;">Location Required for Rescue</h3>
-        <p style="font-size:14px;margin:0 0 16px;">
-          ${
-            isDenied
-              ? "Location access is currently blocked. Tap the settings icon in your browser address bar, set Location to Allow, then tap Retry."
-              : "Allow GPS access so Raksham can find the nearest hospital, police station, and share live rescue coordinates."
-          }
-        </p>
-        <button id="raksham-allow-loc-btn" style="background:#d32f2f;color:#fff;border:none;padding:12px 18px;border-radius:8px;font-weight:700;width:100%;cursor:pointer;">
-          ${isDenied ? "Retry Location Access" : "Allow Location Access"}
-        </button>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    document.getElementById("raksham-allow-loc-btn").addEventListener("click", () => {
-      triggerGeo();
-    });
-  };
-  const removeOverlay = () => {
-    const el = document.getElementById("raksham-loc-overlay");
-    if (el) el.remove();
-  };
-  const triggerGeo = () => {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        removeOverlay();
-        onSuccess(pos.coords.latitude, pos.coords.longitude);
-      },
-      (err) => {
-        showLocationOverlay(err.code === err.PERMISSION_DENIED);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
-  if (navigator.permissions) {
-    navigator.permissions.query({ name: "geolocation" }).then((status) => {
-      if (status.state === "denied") {
-        showLocationOverlay(true);
-      } else if (status.state === "prompt") {
+    if (!("geolocation" in navigator)) {
+        alert("Geolocation is not supported on this device.");
+        return;
+    }
+    const showLocationOverlay = (isDenied = false) => {
+        if (document.getElementById("raksham-loc-overlay")) return;
+        const overlay = document.createElement("div");
+        overlay.id = "raksham-loc-overlay";
+        overlay.style.cssText =
+            "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;";
+        overlay.innerHTML = `
+          <div style="background:#fff;color:#111;max-width:360px;width:100%;border-radius:12px;padding:20px;text-align:center;font-family:sans-serif;">
+            <h3 style="margin:0 0 8px;color:#d32f2f;">Location Required for Rescue</h3>
+            <p style="font-size:14px;margin:0 0 16px;">
+              ${
+                isDenied
+                    ? "Location access is currently blocked. Tap the settings icon in your browser address bar, set Location to Allow, then tap Retry."
+                    : "Allow GPS access so Raksham can find the nearest hospital, police station, and share live rescue coordinates."
+              }
+            </p>
+            <button id="raksham-allow-loc-btn" style="background:#d32f2f;color:#fff;border:none;padding:12px 18px;border-radius:8px;font-weight:700;width:100%;cursor:pointer;">
+              ${isDenied ? "Retry Location Access" : "Allow Location Access"}
+            </button>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+        document.getElementById("raksham-allow-loc-btn").addEventListener("click", () => triggerGeo());
+    };
+    const removeOverlay = () => {
+        const el = document.getElementById("raksham-loc-overlay");
+        if (el) el.remove();
+    };
+    const triggerGeo = () => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                removeOverlay();
+                onSuccess(pos.coords.latitude, pos.coords.longitude);
+            },
+            (err) => {
+                showLocationOverlay(err.code === err.PERMISSION_DENIED);
+            },
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        );
+    };
+    if (navigator.permissions) {
+        navigator.permissions.query({ name: "geolocation" }).then((status) => {
+            if (status.state === "denied") showLocationOverlay(true);
+            else if (status.state === "prompt") { showLocationOverlay(false); triggerGeo(); }
+            else triggerGeo();
+        }).catch(() => triggerGeo());
+    } else {
         showLocationOverlay(false);
         triggerGeo();
-      } else {
-        triggerGeo();
-      }
-    }).catch(() => triggerGeo());
-  } else {
-    showLocationOverlay(false);
-    triggerGeo();
-  }
-}
-async function alertNearestAuthorities() {
-  const params = new URLSearchParams(window.location.search);
-  const userId = params.get("id");
-  const btn = document.getElementById("btn-alert-authorities");
-  const statusEl = document.getElementById("authority-dispatch-status");
-
-  if (!userId) return;
-
-  const confirmed = confirm(
-    "This will send live emergency SMS and email alerts to the nearest Hospital, Police Station, and Ambulance. Proceed?"
-  );
-  if (!confirmed) return;
-
-  btn.disabled = true;
-  btn.textContent = "Dispatching Alerts to Authorities...";
-
-  try {
-    const resp = await fetch(`${API_BASE_URL}/alert_authorities`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        latitude: window.currentScanLat ?? null,
-        longitude: window.currentScanLon ?? null,
-        services: window.currentRoutedServices || {}
-      })
-    });
-    const data = await resp.json();
-
-    if (data.status === "Authorities Alerted") {
-      btn.textContent = "✅ Authorities Alerted";
-      btn.style.background = "#2e7d32";
-
-      let lines = [];
-      if (data.sms_notified?.length) {
-        lines.push("SMS sent to: " + data.sms_notified.map(x => x.name).join(", "));
-      }
-      if (data.email_notified?.length) {
-        lines.push("Email sent to: " + data.email_notified.map(x => x.name).join(", "));
-      }
-      if (data.call_only?.length) {
-        lines.push(
-          "Direct call needed: " +
-          data.call_only.map(x => `${x.name} (<a href="tel:${x.phone}">${x.phone}</a>)`).join(", ")
-        );
-      }
-      statusEl.innerHTML = lines.join("<br>");
-    } else {
-      throw new Error(data.message || "Dispatch failed");
     }
-  } catch (err) {
-    btn.disabled = false;
-    btn.textContent = "🚨 Retry Alerting Nearest Authorities";
-    statusEl.innerHTML = `<span style="color:#ff5252;">Could not alert authorities. Call 112 / 108 directly.</span>`;
-  }
 }
-window.onload= () => {
-  const params = new URLSearchParams(window.location.search);
-  const isTrackPage = window.location.pathname.includes("track.html");
 
-  if (params.has("id") && !isTrackPage) {
-    requestScanLocation(() => {
-      fetchAndDisplayData();
-    });
-  } else {
-    fetchAndDisplayData();
-  }
+// --- EXPLICIT AUTHORITY DISPATCH BUTTON (IMMEDIATE ACTIONS PAGE) ---
+async function alertNearestAuthorities() {
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get("id");
+    const btn = document.getElementById("btn-alert-authorities");
+    const statusEl = document.getElementById("authority-dispatch-status");
+
+    if (!userId) return;
+
+    const confirmed = confirm(
+        "This will send live emergency SMS and email alerts to the nearest Hospital, Police Station, and Ambulance. Proceed?"
+    );
+    if (!confirmed) return;
+
+    btn.disabled = true;
+    btn.textContent = "Dispatching Alerts to Authorities...";
+
+    if (window.currentScanLat == null || window.currentScanLon == null) {
+        try {
+            const pos = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+            });
+            window.currentScanLat = pos.coords.latitude;
+            window.currentScanLon = pos.coords.longitude;
+        } catch (e) { console.warn("GPS unavailable during authority dispatch"); }
+    }
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/alert_authorities`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                user_id: userId,
+                latitude: window.currentScanLat ?? null,
+                longitude: window.currentScanLon ?? null,
+                services: window.currentRoutedServices || window.lastDispatchedServices || {}
+            })
+        });
+        const data = await resp.json();
+
+        if (data.status === "Authorities Alerted") {
+            btn.textContent = "✅ Authorities Alerted";
+            btn.style.background = "#2e7d32";
+
+            let lines = [];
+            if (data.sms_notified?.length) {
+                lines.push("SMS sent to: " + data.sms_notified.map(x => x.name).join(", "));
+            }
+            if (data.email_notified?.length) {
+                lines.push("Email sent to: " + data.email_notified.map(x => x.name).join(", "));
+            }
+            if (data.call_only?.length) {
+                lines.push(
+                    "Direct call needed: " +
+                    data.call_only.map(x => `${x.name} (<a href="tel:${x.phone}">${x.phone}</a>)`).join(", ")
+                );
+            }
+            statusEl.innerHTML = lines.join("<br>");
+        } else {
+            throw new Error(data.message || "Dispatch failed");
+        }
+    } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "🚨 Retry Alerting Nearest Authorities";
+        statusEl.innerHTML = `<span style="color:#ff5252;">Could not alert authorities. Call 112 / 108 directly.</span>`;
+    }
+}
+
+window.onload = () => {
+    const params = new URLSearchParams(window.location.search);
+    const isTrackPage = window.location.pathname.includes("track.html");
+    const emergencyId = params.get("id");
+
+    if (emergencyId && !isTrackPage) {
+        fetchAndDisplayData();
+        requestScanLocation((lat, lon) => {
+            window.currentScanLat = lat;
+            window.currentScanLon = lon;
+
+            // Start BallTree + OSRM routing immediately in background
+            startPreRouting(lat, lon);
+
+            fetch(`${API_BASE_URL}/update_location`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_id: emergencyId, lat, lon })
+            }).catch(() => {});
+        });
+    } else {
+        fetchAndDisplayData();
+    }
 };
