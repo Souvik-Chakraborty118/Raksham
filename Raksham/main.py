@@ -2,6 +2,7 @@ import os
 import time
 import json
 import uuid
+import base64
 import asyncio
 import hashlib
 import smtplib
@@ -14,17 +15,18 @@ import psycopg2
 import numpy as np
 import joblib
 from sklearn.neighbors import BallTree
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from psycopg2.extras import RealDictCursor
 
 EARTH_RADIUS_KM = 6371.0
 MAX_MATCH_RADIUS_KM = 35.0
 DATASET_PATH = Path(__file__).resolve().parent / "data" / "emergency_services.json"
+BACKEND_PUBLIC_URL = "https://raksham-api-zdv4.onrender.com"
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
-
 app = FastAPI()
 
 app.add_middleware(
@@ -34,43 +36,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
 @app.get("/")
 async def root():
     return {"status": "online"}
-
-
 @app.get("/health")
 async def health():
     return {"status": "alive"}
-
-
 def get_db_connection():
     return psycopg2.connect(os.getenv("DATABASE_URL"), cursor_factory=RealDictCursor)
-
-
 try:
     ai_model = joblib.load("models/multilingual_rf_model.pkl")
 except Exception:
     ai_model = None
-
 live_locations = {}
-
-
+active_alert_tokens = {}  # {token: {user_id, victim_name, contacts, created_at, cancelled}}
+recent_ip_hits = {}       # {ip: [timestamps]}
 #TWO-STAGE SPATIAL ROUTER: BALLTREE O(log N) + OSRM ROAD ETA
 class SpatialEmergencyRouter:
     def __init__(self, json_path: Path):
         self.by_category = {"hospital": [], "police_station": [], "ambulance": []}
         self.trees = {}
-
         if not json_path.exists():
             print(f"Dataset not found at {json_path}; spatial router running in fallback mode.")
             return
-
         with json_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
-
         for item in data.get("services", []):
             cat = item.get("category")
             if cat in self.by_category and item.get("lat") is not None and item.get("lon") is not None:
@@ -80,12 +70,10 @@ class SpatialEmergencyRouter:
             if items:
                 coords_rad = np.radians([[x["lat"], x["lon"]] for x in items])
                 self.trees[cat] = BallTree(coords_rad, metric="haversine")
-
         print(
             "SpatialEmergencyRouter loaded:",
             {k: len(v) for k, v in self.by_category.items()},
         )
-
     @staticmethod
     def _fallback_service(category: str) -> dict:
         defaults = {
@@ -136,8 +124,6 @@ class SpatialEmergencyRouter:
         tree = self.trees.get(category)
         if not items or not tree:
             return self._fallback_service(category)
-
-        # Stage 1: BallTree O(log N) lookup
         k = min(k, len(items))
         query_rad = np.radians([[user_lat, user_lon]])
         dists_rad, idxs = tree.query(query_rad, k=k)
@@ -153,7 +139,6 @@ class SpatialEmergencyRouter:
         if not candidates:
             return self._fallback_service(category)
 
-        # Stage 2: OSRM road-network ETA refinement (lon,lat order)
         coords_str = f"{user_lon},{user_lat};" + ";".join(
             f"{c['lon']},{c['lat']}" for c in candidates
         )
@@ -164,7 +149,7 @@ class SpatialEmergencyRouter:
 
         winner = None
         try:
-            async with httpx.AsyncClient(timeout=2.5) as client:
+            async with httpx.AsyncClient(timeout=1.5) as client:
                 resp = await client.get(osrm_url)
                 if resp.status_code == 200:
                     body = resp.json()
@@ -206,15 +191,14 @@ class SpatialEmergencyRouter:
             "ambulance": amb,
         }
 
-
 spatial_router = SpatialEmergencyRouter(DATASET_PATH)
-
 
 #PYDANTIC MODELS
 class NewUser(BaseModel):
     email: str; password: str; name: str; blood_group: str; allergies: str; conditions: str
     phone: str; em1: str; em2: str; em3: str; em4: str; em5: str; em6: str
-    
+
+
 class LoginUser(BaseModel): email: str; password: str
 class ProfileRequest(BaseModel): email: str
 
@@ -241,6 +225,7 @@ class AuthorityAlertPayload(BaseModel):
     longitude: Optional[float] = None
     services: dict = {}
     categories: List[str] = ["hospital", "police_station", "ambulance"]
+    scene_photo_base64: Optional[str] = None
 
 
 class TriagePayload(BaseModel):
@@ -248,6 +233,7 @@ class TriagePayload(BaseModel):
     services: dict = {}
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    lang: str = "en"
 
 
 class ChatMessage(BaseModel): role: str; content: str
@@ -255,8 +241,7 @@ class ChatPayload(BaseModel): message: str; services: dict = {}; history: List[C
 class MedicalReportPayload(BaseModel): email: str; image_base64: str
 class ProfileVisibilityPayload(BaseModel): email: str; show_medical_summary: bool
 
-
-# --- MULTI GROQ API KEY FALLBACK PARSER ---
+#MULTI GROQ API KEY FALLBACK PARSER
 def load_groq_keys() -> List[str]:
     keys = []
     for env_var in ("GROQ_API_KEYS", "GROQ_API_KEY", "GROQ_API_KEY_1", "GROQ_API_KEY_2"):
@@ -276,8 +261,6 @@ CHAT_MODELS = [
     "openai/gpt-oss-120b",
 ]
 VISION_MODEL = "qwen/qwen3.8-27b"
-
-
 def clean_llm_output(raw_text: str) -> str:
     if not raw_text:
         return ""
@@ -285,16 +268,28 @@ def clean_llm_output(raw_text: str) -> str:
         return raw_text.split("</think>")[-1].strip()
     return raw_text.strip()
 
-
-#INSTANT FAMILY/EMERGENCY CONTACTS SMS ONLY
-def send_family_emergency_sms(contacts, services, lat, lon, user_id, victim):
+#TEXTBEE HELPER
+def send_textbee_sms(recipients: List[str], message: str):
     textbee_key = os.getenv("TEXTBEE_API_KEY")
     textbee_device = os.getenv("TEXTBEE_DEVICE_ID")
-    valid_contacts = [c.strip() for c in contacts if c and len(c.strip()) >= 5]
-
-    if not (valid_contacts and textbee_key and textbee_device):
+    clean_recips = [c.strip() for c in recipients if c and len(c.strip()) >= 5]
+    if not (clean_recips and textbee_key and textbee_device):
         return
+    url = f"https://api.textbee.dev/api/v1/gateway/devices/{textbee_device}/send-sms"
+    try:
+        resp = requests.post(
+            url,
+            json={"recipients": clean_recips, "message": message},
+            headers={"x-api-key": textbee_key, "Content-Type": "application/json"},
+            timeout=8,
+        )
+        if resp.status_code >= 400:
+            print(f"TextBee SMS failed ({resp.status_code}): {resp.text}")
+    except Exception as e:
+        print(f"TextBee SMS exception: {e}")
 
+#FAMILY SMS + VICTIM "I'M SAFE" KILL-SWITCH SMS
+def send_family_and_killswitch_sms(contacts, services, lat, lon, user_id, victim, safe_token):
     maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat is not None and lon is not None else "Location unavailable"
     live_link = f"https://raksham-pi.vercel.app/track.html?id={user_id}"
 
@@ -313,25 +308,31 @@ def send_family_emergency_sms(contacts, services, lat, lon, user_id, victim):
         f"🚑 Nearest Ambulance: {amb_name}\n\n"
         f"⚠️ Immediate medical assistance is required!"
     )
+    send_textbee_sms(contacts, alert_text)
 
-    url = f"https://api.textbee.dev/api/v1/gateway/devices/{textbee_device}/send-sms"
-    try:
-        resp = requests.post(
-            url,
-            json={"recipients": valid_contacts, "message": alert_text},
-            headers={"x-api-key": textbee_key, "Content-Type": "application/json"},
-            timeout=8,
+    # Send 1-tap "I'm Safe / False Alarm" Kill-Switch SMS to the victim's own phone
+    victim_phone = (victim.get("phone") or "").strip()
+    if len(victim_phone) >= 5:
+        safe_url = f"{BACKEND_PUBLIC_URL}/safe/{safe_token}"
+        killswitch_text = (
+            f"⚠️ RAKSHAM ALERT TRIGGERED ON YOUR QR TAG\n"
+            f"Your emergency contacts were just notified.\n\n"
+            f"If this was a PRANK or FALSE ALARM, tap below to mark yourself SAFE & notify family immediately:\n"
+            f"{safe_url}"
         )
-        if resp.status_code >= 400:
-            print(f"TextBee family SMS failed ({resp.status_code}): {resp.text}")
-    except Exception as e:
-        print(f"TextBee family SMS exception: {e}")
+        send_textbee_sms([victim_phone], killswitch_text)
 
 
-#NEAREST AUTHORITIES SMS + SMTP EMAIL ---
-def dispatch_authority_alerts(services: dict, categories: List[str], lat: Optional[float], lon: Optional[float], user_id: str, victim: dict):
-    textbee_key = os.getenv("TEXTBEE_API_KEY")
-    textbee_device = os.getenv("TEXTBEE_DEVICE_ID")
+#ON-DEMAND AUTHORITIES SMS + SMTP EMAIL WITH LIVE SCENE PHOTO
+def dispatch_authority_alerts(
+    services: dict,
+    categories: List[str],
+    lat: Optional[float],
+    lon: Optional[float],
+    user_id: str,
+    victim: dict,
+    scene_photo_base64: Optional[str] = None,
+):
     sender_email = os.getenv("SENDER_EMAIL")
     sender_password = os.getenv("SENDER_PASSWORD")
 
@@ -354,11 +355,11 @@ def dispatch_authority_alerts(services: dict, categories: List[str], lat: Option
     )
     live_link = f"https://raksham-pi.vercel.app/track.html?id={user_id}"
     medical_summary = victim.get("medical_summary") if victim.get("show_medical_summary", True) else "Hidden by user"
+    verified_tag = "YES (Live Scene Photo Attached)" if scene_photo_base64 else "No photo attached"
 
-    # 1. Dispatch TextBee SMS to SMS-capable nearest authorities
-    if sms_recipients and textbee_key and textbee_device:
+    if sms_recipients:
         auth_sms = (
-            f" RAKSHAM EMERGENCY DISPATCH \n\n"
+            f"🚨 RAKSHAM EMERGENCY DISPATCH 🚨\n\n"
             f"👤 Victim: {victim.get('name') or 'Unknown'}\n"
             f"🩸 Blood Group: {victim.get('blood_group') or 'N/A'}\n"
             f"⚠️ Allergies: {victim.get('allergies') or 'None'}\n"
@@ -367,22 +368,8 @@ def dispatch_authority_alerts(services: dict, categories: List[str], lat: Option
             f"📡 Live Track: {live_link}\n"
             f"Requested via Raksham QR Emergency Alert."
         )
-        url = f"https://api.textbee.dev/api/v1/gateway/devices/{textbee_device}/send-sms"
-        try:
-            resp = requests.post(
-                url,
-                json={"recipients": sms_recipients, "message": auth_sms},
-                headers={"x-api-key": textbee_key, "Content-Type": "application/json"},
-                timeout=8,
-            )
-            if resp.status_code >= 400:
-                print(f"TextBee authority SMS failed ({resp.status_code}): {resp.text}")
-            else:
-                print(f"Authority SMS dispatched to {sms_recipients}")
-        except Exception as e:
-            print(f"TextBee authority SMS exception: {e}")
+        send_textbee_sms(sms_recipients, auth_sms)
 
-    #Gmail SMTP email to email-capable nearest authorities
     if email_recipients and sender_email and sender_password:
         hosp = services.get("hospital") or {}
         pol = services.get("police_station") or {}
@@ -391,6 +378,7 @@ def dispatch_authority_alerts(services: dict, categories: List[str], lat: Option
         body = (
             f"RAKSHAM CRITICAL EMERGENCY DISPATCH\n"
             f"{'=' * 40}\n"
+            f"Bystander Live Verification: {verified_tag}\n\n"
             f"Victim Name: {victim.get('name', 'Unknown')}\n"
             f"Blood Group: {victim.get('blood_group', 'N/A')}\n"
             f"Allergies: {victim.get('allergies', 'None listed')}\n"
@@ -412,6 +400,19 @@ def dispatch_authority_alerts(services: dict, categories: List[str], lat: Option
         msg["To"] = ", ".join(email_recipients)
         msg.set_content(body)
 
+        if scene_photo_base64 and "," in scene_photo_base64:
+            try:
+                _, b64_data = scene_photo_base64.split(",", 1)
+                img_bytes = base64.b64decode(b64_data)
+                msg.add_attachment(
+                    img_bytes,
+                    maintype="image",
+                    subtype="jpeg",
+                    filename="bystander_live_scene.jpg",
+                )
+            except Exception as e:
+                print(f"Scene photo attach failed: {e}")
+
         try:
             with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as smtp:
                 smtp.login(sender_email, sender_password)
@@ -419,16 +420,12 @@ def dispatch_authority_alerts(services: dict, categories: List[str], lat: Option
             print(f"Authority alert email dispatched to {email_recipients}")
         except Exception as e:
             print(f"SMTP authority email dispatch failed: {e}")
-    elif email_recipients:
-        print("SMTP skipped: SENDER_EMAIL or SENDER_PASSWORD not configured.")
-
 
 #ROUTES
 @app.post("/nearest_services")
 async def nearest_services(payload: CoordinatesPayload):
     services = await spatial_router.find_all_nearest(payload.lat, payload.lon)
     return {"status": "success", "services": services}
-
 
 @app.post("/register")
 async def register(user: NewUser):
@@ -447,7 +444,6 @@ async def register(user: NewUser):
     except Exception as e:
         return {"error": str(e)}
 
-
 @app.post("/login")
 async def login(user: LoginUser):
     try:
@@ -462,7 +458,6 @@ async def login(user: LoginUser):
         return {"error": "Invalid email or password"}
     except Exception as e:
         return {"error": str(e)}
-
 
 @app.post("/retrieve_profile_data")
 async def retrieve_profile(req: ProfileRequest):
@@ -494,7 +489,6 @@ async def get_public_profile(user_id: str):
     except Exception as e:
         return {"error": str(e)}
 
-
 @app.post("/update_profile")
 async def update_profile(user: UpdateUser):
     try:
@@ -522,53 +516,101 @@ async def get_location(user_id: str):
         return {"status": "success", "data": {"lat": loc["lat"], "lon": loc["lon"]}}
     return {"status": "error", "message": "Location unavailable."}
 
-
 @app.post("/trigger_emergency")
-async def trigger_emergency(payload: EmergencyPayload, background_tasks: BackgroundTasks):
-    """Instant alert fired on QR scan: alerts personal emergency contacts (em1-em6) ONLY."""
+async def trigger_emergency(payload: EmergencyPayload, request: Request, background_tasks: BackgroundTasks):
+    """Alerts personal emergency contacts (em1-em6) and texts a 1-tap 'I'm Safe' Kill-Switch link to the victim."""
     services = payload.services or {}
-    if payload.latitude is not None and payload.longitude is not None:
+    if not services and payload.latitude is not None and payload.longitude is not None:
         services = await spatial_router.find_all_nearest(payload.latitude, payload.longitude)
+
+    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown").split(",")[0].strip()
+    now = time.time()
+    hits = [t for t in recent_ip_hits.get(client_ip, []) if now - t < 3600]
+    if len(hits) >= 10:
+        return {"status": "rate_limited", "message": "Too many alerts from this IP. Call 112 directly.", "services": services}
+    hits.append(now)
+    recent_ip_hits[client_ip] = hits
+
+    safe_token = uuid.uuid4().hex[:12]
 
     try:
         conn = get_db_connection(); cursor = conn.cursor()
         cursor.execute(
-            "SELECT name, blood_group, em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s",
+            "SELECT name, blood_group, phone, em1, em2, em3, em4, em5, em6 FROM users WHERE user_id = %s",
             (payload.user_id,),
         )
         row = cursor.fetchone(); cursor.close(); conn.close()
         if row:
             contacts = [row["em1"], row["em2"], row["em3"], row["em4"], row["em5"], row["em6"]]
+            active_alert_tokens[safe_token] = {
+                "user_id": payload.user_id,
+                "victim_name": row.get("name") or "User",
+                "contacts": contacts,
+                "created_at": now,
+                "cancelled": False,
+            }
             background_tasks.add_task(
-                send_family_emergency_sms,
+                send_family_and_killswitch_sms,
                 contacts,
                 services,
                 payload.latitude,
                 payload.longitude,
                 payload.user_id,
                 dict(row),
+                safe_token,
             )
     except Exception as e:
         print(f"Trigger emergency error: {e}")
 
-    return {"status": "Family Emergency Alert Triggered", "services": services}
+    return {"status": "Family Emergency Alert Triggered", "safe_token": safe_token, "services": services}
 
+@app.get("/safe/{token}", response_class=HTMLResponse)
+async def victim_safe_killswitch(token: str, background_tasks: BackgroundTasks):
+    """1-tap Victim 'I'm Safe' Kill-Switch: cancels false alarms and auto-notifies family."""
+    entry = active_alert_tokens.get(token)
+    if not entry:
+        return HTMLResponse(
+            "<html><body style='font-family:sans-serif;text-align:center;padding:40px;'>"
+            "<h2>Link Expired</h2><p>This Raksham alert link is no longer active.</p></body></html>",
+            status_code=404,
+        )
+
+    if not entry["cancelled"]:
+        entry["cancelled"] = True
+        safe_msg = (
+            f"✅ RAKSHAM SAFE UPDATE ✅\n\n"
+            f"{entry['victim_name']} has confirmed they are SAFE (False Alarm / Accidental Scan).\n"
+            f"No emergency assistance is required."
+        )
+        background_tasks.add_task(send_textbee_sms, entry["contacts"], safe_msg)
+
+    return HTMLResponse(
+        f"""<!DOCTYPE html>
+        <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Raksham - Confirmed Safe</title></head>
+        <body style="font-family:Poppins,sans-serif;background:#f0fdf4;color:#14532d;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;">
+          <div style="background:#fff;border:2px solid #22c55e;border-radius:16px;padding:28px;max-width:400px;text-align:center;box-shadow:0 10px 25px rgba(0,0,0,0.08);">
+            <div style="font-size:48px;">✅</div>
+            <h2 style="margin:10px 0;">Alarm Cancelled — You're Marked Safe</h2>
+            <p style="font-size:14px;color:#334155;">
+              Your emergency contacts have been sent an automatic <strong>"Confirmed Safe (False Alarm)"</strong> SMS update.
+            </p>
+          </div>
+        </body></html>"""
+    )
 
 @app.post("/alert_authorities")
 async def alert_authorities(payload: AuthorityAlertPayload, background_tasks: BackgroundTasks):
-    """Explicit opt-in dispatch when rescuer clicks 'Alert Nearest Authorities'."""
+    """Explicit opt-in dispatch with optional bystander live-camera verification photo."""
     services = payload.services or {}
-    if payload.latitude is not None and payload.longitude is not None:
+    if not services and payload.latitude is not None and payload.longitude is not None:
         services = await spatial_router.find_all_nearest(payload.latitude, payload.longitude)
 
     valid_categories = [c for c in payload.categories if c in ("hospital", "police_station", "ambulance")]
     if not valid_categories:
         valid_categories = ["hospital", "police_station", "ambulance"]
 
-    sms_notified = []
-    email_notified = []
-    call_only = []
-
+    sms_notified, email_notified, call_only = [], [], []
     for cat in valid_categories:
         svc = services.get(cat) or {}
         name = svc.get("name", cat)
@@ -600,6 +642,7 @@ async def alert_authorities(payload: AuthorityAlertPayload, background_tasks: Ba
             payload.longitude,
             payload.user_id,
             dict(row),
+            payload.scene_photo_base64,
         )
     except Exception as e:
         print(f"Alert authorities error: {e}")
@@ -607,12 +650,12 @@ async def alert_authorities(payload: AuthorityAlertPayload, background_tasks: Ba
 
     return {
         "status": "Authorities Alerted",
+        "photo_attached": bool(payload.scene_photo_base64),
         "sms_notified": sms_notified,
         "email_notified": email_notified,
         "call_only": call_only,
         "services": services,
     }
-
 
 @app.post("/ai_triage")
 async def ai_triage(payload: TriagePayload):
@@ -624,22 +667,35 @@ async def ai_triage(payload: TriagePayload):
     p = dispatched.get("police_station", {}).get("html", "N/A")
     a = dispatched.get("ambulance", {}).get("html", "N/A")
 
+    lang = payload.lang if payload.lang in ("en", "bn", "hi") else "en"
+    headers = {"en": "IMMEDIATE ACTIONS:", "bn": "তাৎক্ষণিক করণীয়:", "hi": "तुरंत करने योग्य कदम:"}
+    steps_map = {
+        "crash": {
+            "en": ["1. DO NOT move the victim unless they are in immediate danger.", "2. Apply firm, direct pressure to any bleeding wounds.", "3. Keep the victim's head and neck perfectly still."],
+            "bn": ["১. বড় বিপদ না থাকলে আহত ব্যক্তিকে নড়াবেন না।", "২. রক্তপাত হলে পরিষ্কার কাপড় দিয়ে জোরে চেপে ধরুন।", "৩. আহত ব্যক্তির মাথা ও ঘাড় স্থির রাখুন।"],
+            "hi": ["1. जब तक कोई बड़ा ख़तरा न हो, घायल को न हिलाएं।", "2. खून बहने पर साफ़ कपड़े से सीधा दबाव डालें।", "3. घायल का सिर और गर्दन बिल्कुल स्थिर रखें।"],
+        },
+        "assault": {
+            "en": ["1. Move to a safe location immediately.", "2. Apply direct pressure to stop bleeding.", "3. Wait for police and ambulance dispatch."],
+            "bn": ["১. অবিলম্বে নিরাপদ স্থানে সরে যান।", "২. রক্তপাত বন্ধ করতে ক্ষতস্থানে সরাসরি চাপ দিন।", "৩. পুলিশ ও অ্যাম্বুলেন্স আসা পর্যন্ত অপেক্ষা করুন।"],
+            "hi": ["1. तुरंत किसी सुरक्षित स्थान पर जाएं।", "2. खून रोकने के लिए घाव पर सीधा दबाव डालें।", "3. पुलिस और एम्बुलेंस के आने तक इंतज़ार करें।"],
+        },
+        "default": {
+            "en": ["1. Check airway, breathing, and circulation.", "2. Do not leave the victim unattended.", "3. Apply direct pressure to any bleeding."],
+            "bn": ["১. শ্বাস-প্রশ্বাস ও জ্ঞান আছে কিনা পরীক্ষা করুন।", "২. আহত ব্যক্তিকে একা ছেড়ে যাবেন না।", "৩. রক্তপাত হলে সরাসরি চাপ দিয়ে ধরে রাখুন।"],
+            "hi": ["1. सांस और होश की जांच करें।", "2. पीड़ित को अकेला न छोड़ें।", "3. खून बहने पर सीधा दबाव बनाए रखें।"],
+        },
+    }
+
+    situation = (payload.type or "").lower()
+    key = "crash" if ("crash" in situation or "accident" in situation) else ("assault" in situation and "assault") or "default"
+
     guidance = [
         f"<strong>🏥 {h}</strong><br>",
         f"<strong>🚓 {p}</strong><br>",
         f"<strong>🚑 {a}</strong><br>",
-        "<br><strong style='color:#FF003C;'>IMMEDIATE ACTIONS:</strong>",
-    ]
-    situation = (payload.type or "").lower()
-
-    if "heart" in situation:
-        guidance.extend(["1. Have the person sit down, rest and try to keep calm.", "2. Loosen any tight clothing.", "3. If unresponsive, begin CPR immediately."])
-    elif "accident" in situation:
-        guidance.extend(["1. DO NOT move the victim unless they are in immediate danger.", "2. Apply firm, direct pressure to any bleeding wounds.", "3. Keep the victim's head perfectly still."])
-    elif "assault" in situation:
-        guidance.extend(["1. Move to a safe location immediately.", "2. Apply direct pressure to stop bleeding.", "3. Wait for police and ambulance dispatch."])
-    else:
-        guidance.extend(["1. Check airway, breathing and circulation.", "2. Do not leave the victim unattended.", "3. Apply pressure to any bleeding."])
+        f"<br><strong style='color:#FF003C;'>{headers[lang]}</strong>",
+    ] + steps_map[key][lang]
 
     if ai_model:
         try:
@@ -648,6 +704,7 @@ async def ai_triage(payload: TriagePayload):
         except Exception:
             pass
     return {"status": "success", "suggestions": guidance, "services": dispatched}
+
 @app.post("/chat")
 async def chat_endpoint(payload: ChatPayload):
     hosp_name = payload.services.get("hospital", {}).get("name", "the nearest hospital")
@@ -658,7 +715,7 @@ async def chat_endpoint(payload: ChatPayload):
         "role": "system",
         "content": (
             f"You are Raksham AI, an emergency first-aid assistant. "
-            f"Give short, direct, step-by-step first-aid instructions in the same language the user writes in. "
+            f"Give short, direct, step-by-step first-aid instructions in the same language the user writes in (English, Bengali, or Hindi). "
             f"Remind them to head to {hosp_name} or call 112 if critical."
         ),
     }]
@@ -666,6 +723,7 @@ async def chat_endpoint(payload: ChatPayload):
         if turn.role in ("user", "assistant") and turn.content:
             msgs.append({"role": turn.role, "content": turn.content})
     msgs.append({"role": "user", "content": payload.message})
+
     async with httpx.AsyncClient(timeout=20) as client:
         for model_name in CHAT_MODELS:
             for key in GROQ_KEYS_LIST:
@@ -690,14 +748,10 @@ async def chat_endpoint(payload: ChatPayload):
                         if not clean_text:
                             clean_text = f"Stay calm and keep the victim stable. Head immediately to {hosp_name} or call 112."
                         return {"response": clean_text}
-                    else:
-                        print(f"Groq Chat failed [{model_name}] -> {resp.status_code}: {resp.text}")
-                except Exception as e:
-                    print(f"Groq Chat Exception [{model_name}] -> {e}")
+                except Exception:
                     continue
 
     return {"response": f"Connection issue. Call 112 or head to {hosp_name}."}
-
 
 @app.post("/upload_medical_report")
 async def upload_medical_report(payload: MedicalReportPayload):
@@ -729,10 +783,7 @@ async def upload_medical_report(payload: MedicalReportPayload):
                     summary = clean_llm_output(raw)
                     if summary:
                         break
-                else:
-                    print(f"Groq Vision failed -> {resp.status_code}: {resp.text}")
-            except Exception as e:
-                print(f"Groq Vision Exception -> {e}")
+            except Exception:
                 continue
 
     if not summary:
@@ -748,8 +799,6 @@ async def upload_medical_report(payload: MedicalReportPayload):
         return {"message": "Success", "summary": summary}
     except Exception as e:
         return {"error": str(e)}
-
-
 @app.post("/set_medical_visibility")
 async def set_medical_visibility(payload: ProfileVisibilityPayload):
     try:
