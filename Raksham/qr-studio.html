@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raksham - Custom QR Tag Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="qr-studio.css?v=1">
+    <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.js"></script>
+</head>
+<body>
+    <div class="studio-wrap">
+        <div class="top-bar">
+            <div class="brand">RAKSHAM QR STUDIO</div>
+            <a href="profile.html" class="back-link">← Back to Profile</a>
+        </div>
+
+        <div class="grid">
+            <!-- LEFT: CUSTOMIZATION CONTROLS -->
+            <div class="panel">
+                <h3>Customize Your Emergency Tag</h3>
+
+                <div class="control-group">
+                    <label>Tag Format Preset</label>
+                    <div class="preset-row">
+                        <button type="button" class="preset-btn active" data-preset="helmet">🪖 Helmet / Bike</button>
+                        <button type="button" class="preset-btn" data-preset="lockscreen">📱 Lockscreen</button>
+                        <button type="button" class="preset-btn" data-preset="wallet">🪪 Wallet Card</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="tag-headline">Header Call-to-Action</label>
+                    <input id="tag-headline" type="text" value="🚨 SCAN IN EMERGENCY" maxlength="32">
+                </div>
+
+                <div class="control-group color-row">
+                    <div>
+                        <label for="qr-fg">QR Color</label>
+                        <input id="qr-fg" type="color" value="#111111">
+                    </div>
+                    <div>
+                        <label for="qr-bg">QR Background</label>
+                        <input id="qr-bg" type="color" value="#ffffff">
+                    </div>
+                    <div>
+                        <label for="frame-accent">Frame Accent</label>
+                        <input id="frame-accent" type="color" value="#FF003C">
+                    </div>
+                </div>
+
+                <div class="control-group pattern-row">
+                    <div>
+                        <label for="dot-style">Dot Pattern</label>
+                        <select id="dot-style">
+                            <option value="rounded" selected>Rounded</option>
+                            <option value="classy-rounded">Classy Rounded</option>
+                            <option value="extra-rounded">Extra Rounded</option>
+                            <option value="dots">Circular Dots</option>
+                            <option value="square">Classic Square</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="corner-style">Corner Eyes</label>
+                        <select id="corner-style">
+                            <option value="extra-rounded" selected>Extra Rounded</option>
+                            <option value="dot">Circle</option>
+                            <option value="square">Sharp Square</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="logo-preset">Center Icon / Logo (30% Damage-Resistant Level-H QR)</label>
+                    <select id="logo-preset">
+                        <option value="cross" selected>Medical Cross Badge</option>
+                        <option value="shield">Raksham Shield (R)</option>
+                        <option value="none">No Center Logo</option>
+                        <option value="custom">Upload Custom Logo...</option>
+                    </select>
+                    <input id="custom-logo-file" class="file-input hidden" type="file" accept="image/*">
+                </div>
+
+                <div class="control-group">
+                    <label>Privacy & Visible Details on Sticker</label>
+                    <div class="toggle-row">
+                        <label><input type="checkbox" id="show-blood" checked> Show Blood Group</label>
+                        <label><input type="checkbox" id="show-name"> Show Name</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: LIVE PREVIEW & DOWNLOAD -->
+            <div class="panel preview-stage">
+                <div id="tag-card-preview" class="tag-card">
+                    <div id="preview-header" class="tag-header">🚨 SCAN IN EMERGENCY</div>
+                    <div class="tag-body">
+                        <div id="qr-canvas-mount"></div>
+                        <div class="tag-meta">
+                            <span id="preview-blood" class="blood-pill">BLOOD: --</span>
+                            <span id="preview-name" class="name-pill hidden"></span>
+                        </div>
+                    </div>
+                    <div id="preview-footer" class="tag-footer">
+                        Point any phone camera • No app needed • Powered by RAKSHAM
+                    </div>
+                </div>
+
+                <div class="download-actions">
+                    <button id="btn-dl-card" type="button" class="btn-primary">⬇️ Download Ready-to-Print Sticker / Card (PNG)</button>
+                    <button id="btn-dl-wallpaper" type="button" class="btn-secondary">📱 Download Phone Lockscreen Wallpaper (PNG)</button>
+                    <button id="btn-dl-raw" type="button" class="btn-secondary btn-muted">Download QR Only (PNG)</button>
+                </div>
+                <div id="studio-status" class="status-note">Loading your Raksham profile...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="qr-studio.js?v=1"></script>
+</body>
+</html>
