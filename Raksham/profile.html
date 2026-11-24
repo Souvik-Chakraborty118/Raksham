@@ -37,10 +37,14 @@
             
             <img id="qr-image" src="" alt="Your Emergency QR Code" style="width: 250px; border: 5px solid #111111; border-radius: 10px; display: none; margin: 0 auto;">
             <br>
-            <a id="download-link" href="" download="Raksham_Emergency_QR.png">
-                <button class="btn btn-neon" id="download-btn" style="margin-top: 20px; width: 250px; display: none;">DOWNLOAD TAG</button>
+            <a id="download-link" href="" download="Raksham_Emergency_QR.png" style="display: block;">
+                <button class="btn btn-neon" id="download-btn" style="margin-top: 20px; width: 250px; display: none;">DOWNLOAD QR</button>
             </a>
-            
+            <div style="margin-top: 12px;">
+                <button type="button" class="btn btn-dark" onclick="window.location.href='qr-studio.html'" style="width: 250px;">
+                    CUSTOMIZE QR STICKER
+                </button>
+            </div>
             <button class="btn btn-dark" onclick="logout()" style="margin-top: 30px; width: 250px;">LOGOUT</button>
         </div>
     </div>
