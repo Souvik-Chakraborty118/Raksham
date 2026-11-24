@@ -6,78 +6,117 @@
     <title>Raksham - Emergency Medical Tag</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="features.css?v=1">
 </head>
 <body>
     <div class="container">
         <div class="app-header"><span>RAKSHAM</span></div>
 
+        <!-- ONE-TAP MULTILINGUAL TOGGLE -->
+        <div class="lang-toggle-bar" role="group" aria-label="Language Selector">
+            <button type="button" class="lang-btn active" data-lang="en" onclick="setLanguage('en')">EN</button>
+            <button type="button" class="lang-btn" data-lang="bn" onclick="setLanguage('bn')">বাংলা</button>
+            <button type="button" class="lang-btn" data-lang="hi" onclick="setLanguage('hi')">हिन्दी</button>
+        </div>
+
         <div id="main-screen">
             <div class="data-box">
-                <h2>Medical Profile</h2>
-                <p><strong>Name:</strong> <span id="profile-name">Loading...</span></p>
-                <p><strong>Blood Group:</strong> <span id="profile-blood">Loading...</span></p>
-                <p><strong>Allergies:</strong> <span id="profile-allergies">Loading...</span></p>
-                <p><strong>Conditions:</strong> <span id="profile-conditions">Loading...</span></p>
+                <h2 data-i18n="medical_profile">Medical Profile</h2>
+                <p><strong data-i18n="lbl_name">Name:</strong> <span id="profile-name">Loading...</span></p>
+                <p><strong data-i18n="lbl_blood">Blood Group:</strong> <span id="profile-blood">Loading...</span></p>
+                <p><strong data-i18n="lbl_allergies">Allergies:</strong> <span id="profile-allergies">Loading...</span></p>
+                <p><strong data-i18n="lbl_conditions">Conditions:</strong> <span id="profile-conditions">Loading...</span></p>
 
-                <h2 style="margin-top: 20px;">Contact Info</h2>
-                <p><strong>Primary:</strong> <span id="profile-phone">Loading...</span></p>
-                <p><strong>Emergency 1:</strong> <span id="profile-em1"></span></p>
-                <p><strong>Emergency 2:</strong> <span id="profile-em2"></span></p>
-                <p><strong>Emergency 3:</strong> <span id="profile-em3"></span></p>
-                <p><strong>Emergency 4:</strong> <span id="profile-em4"></span></p>
-                <p><strong>Emergency 5:</strong> <span id="profile-em5"></span></p>
-                <p><strong>Emergency 6:</strong> <span id="profile-em6"></span></p>
+                <h2 style="margin-top: 20px;" data-i18n="contact_info">Contact Info</h2>
+                <p><strong data-i18n="lbl_primary">Primary:</strong> <span id="profile-phone">Loading...</span></p>
+                <p><strong data-i18n="lbl_em1">Emergency 1:</strong> <span id="profile-em1"></span></p>
+                <p><strong data-i18n="lbl_em2">Emergency 2:</strong> <span id="profile-em2"></span></p>
+                <p><strong data-i18n="lbl_em3">Emergency 3:</strong> <span id="profile-em3"></span></p>
+                <p><strong data-i18n="lbl_em4">Emergency 4:</strong> <span id="profile-em4"></span></p>
+                <p><strong data-i18n="lbl_em5">Emergency 5:</strong> <span id="profile-em5"></span></p>
+                <p><strong data-i18n="lbl_em6">Emergency 6:</strong> <span id="profile-em6"></span></p>
             </div>
 
             <div class="data-box" id="medical-history-box" style="display:none;">
-                <h2>Medical History Summary</h2>
+                <h2 data-i18n="med_history">Medical History Summary</h2>
                 <p id="profile-medical-summary"></p>
             </div>
 
-            <button class="btn btn-neon" onclick="startCountdown()">REPORT EMERGENCY</button>
+            <button class="btn btn-neon" onclick="startCountdown()" data-i18n="btn_report">REPORT EMERGENCY</button>
         </div>
 
         <div id="countdown-screen" class="hidden">
-            <h2 class="heavy-title">ALERTING EMERGENCY CONTACTS IN:</h2>
-            <div class="timer" id="timer-display">10</div>
-            <p class="warning">WARNING: Prank alerts are traced by IP Address.</p>
-            <button class="btn btn-dark" onclick="cancelEmergency()">CANCEL ALARM</button>
+            <h2 class="heavy-title" data-i18n="countdown_title">ALERTING EMERGENCY CONTACTS IN:</h2>
+            <div class="timer" id="timer-display">5</div>
+            <p class="warning" data-i18n="prank_warning">WARNING: Prank alerts are traced by IP Address.</p>
+            <button class="btn btn-dark" onclick="cancelEmergency()" data-i18n="btn_cancel">CANCEL ALARM</button>
         </div>
 
         <div id="triage-screen" class="hidden">
-            <h2 class="heavy-title red-text">EMERGENCY TRIGGERED</h2>
-            <p class="subtitle">Select the situation below to get immediate first-aid instructions:</p>
-            <button class="btn btn-dark" onclick="sendTriage('Car Crash')">CAR CRASH</button>
-            <button class="btn btn-dark" onclick="sendTriage('Physical Assault')">PHYSICAL ASSAULT</button>
+            <h2 class="heavy-title red-text" data-i18n="triage_title">EMERGENCY TRIGGERED</h2>
+            <p class="subtitle" data-i18n="triage_sub">Select the situation below to get immediate first-aid instructions:</p>
+            <button class="btn btn-dark" onclick="sendTriage('Car Crash')" data-i18n="btn_crash">CAR CRASH</button>
+            <button class="btn btn-dark" onclick="sendTriage('Physical Assault')" data-i18n="btn_assault">PHYSICAL ASSAULT</button>
         </div>
 
         <div id="guidance-screen" class="hidden">
-            <h2 class="heavy-title">IMMEDIATE ACTIONS</h2>
+            <h2 class="heavy-title" data-i18n="guidance_title">IMMEDIATE ACTIONS</h2>
 
-            <div id="authority-dispatch-box" style="margin-bottom: 16px;">
-                <button id="btn-alert-authorities" onclick="alertNearestAuthorities()" class="btn" style="background:#d32f2f;color:#fff;border:none;padding:14px 16px;border-radius:12px;font-weight:700;width:100%;cursor:pointer;box-shadow:0 4px 10px rgba(211,47,47,0.35);">
-                    🚨 ALERT NEAREST AUTHORITIES (HOSPITAL, POLICE & AMBULANCE)
+            <!-- OFFLINE 2G CELLULAR SMS FALLBACK (AUTO-REVEALED IF NETWORK FAILS) -->
+            <div id="offline-sos-box" class="offline-sos-box hidden">
+                <p class="offline-sos-title" data-i18n="offline_title">Weak/No Internet! Send SOS via 2G Cellular SMS:</p>
+                <a id="offline-sms-link" href="#" class="btn-offline-sms" data-i18n="btn_offline_sms">📩 SEND OFFLINE SMS TO FAMILY</a>
+                <a href="tel:112" class="btn-offline-112" data-i18n="btn_call_112">📞 CALL 112 EMERGENCY</a>
+            </div>
+
+            <div id="authority-dispatch-box" class="authority-dispatch-box">
+                <button id="btn-alert-authorities" onclick="openAuthorityVerifyModal()" class="btn btn-authority" data-i18n="btn_authorities">
+                    ALERT NEAREST AUTHORITIES (HOSPITAL, POLICE & AMBULANCE)
                 </button>
-                <div id="authority-dispatch-status" style="margin-top:8px;font-size:13px;text-align:center;"></div>
+                <div id="authority-dispatch-status" class="authority-status"></div>
             </div>
 
             <div class="data-box red-text bold-text" id="ai-suggestions"></div>
-            <p class="subtitle">Emergency contacts alerted. Stay with the victim.</p>
+            <p class="subtitle" data-i18n="guidance_sub">Emergency contacts alerted. Stay with the victim.</p>
 
             <!-- CHATBOT & VOICE UI -->
             <div class="data-box" id="chat-box" style="display:none; margin-top: 20px;">
-                <h3>Raksham AI Assistant</h3>
+                <h3 data-i18n="ai_title">Raksham AI Assistant</h3>
                 <div id="chat-output" class="chat-output"></div>
                 <div class="chat-input-row" style="display: flex; gap: 5px; align-items: center;">
                     <button id="mic-btn" onclick="startVoiceRecognition()" style="background: #333; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;" title="Tap to Speak">🎤</button>
                     <input id="chat-input" type="text" placeholder="Ask Raksham AI..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                    <button class="btn btn-dark" onclick="sendChatMessage()" style="padding: 8px 15px; margin: 0; width: auto;">Send</button>
+                    <button class="btn btn-dark" onclick="sendChatMessage()" style="padding: 8px 15px; margin: 0; width: auto;" data-i18n="btn_send">Send</button>
                 </div>
             </div>
         </div>
+
         <div class="footer">Developed by <span>Team Raksham</span></div>
     </div>
 
-    <script src="script.js?v=3"></script>
+    <!-- BYSTANDER LIVE-CAMERA VERIFICATION MODAL -->
+    <div id="authority-verify-modal" class="verify-modal-backdrop hidden">
+        <div class="verify-modal-card">
+            <h3 data-i18n="verify_title">Verify & Dispatch Authorities</h3>
+            <p data-i18n="verify_desc">Snap a live photo of the scene (anti-prank verification & visual triage for doctors), then confirm dispatch.</p>
+
+            <label class="camera-capture-label" for="live-scene-camera" data-i18n="btn_snap_photo">
+                📸 Snap Live Scene Photo (Camera Only)
+            </label>
+            <input id="live-scene-camera" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleScenePhotoCapture(event)">
+            <img id="scene-photo-preview" class="scene-preview-img hidden" alt="Live Scene Preview">
+
+            <div class="verify-actions">
+                <button type="button" id="btn-confirm-auth-dispatch" class="btn-confirm-dispatch" onclick="confirmAuthorityDispatch()" data-i18n="btn_confirm_dispatch">
+                    Confirm & Alert Authorities Now
+                </button>
+                <button type="button" class="btn-cancel-modal" onclick="closeAuthorityVerifyModal()" data-i18n="btn_close_modal">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js?v=5"></script>
 </body>
 </html>
