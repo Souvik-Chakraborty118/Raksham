@@ -8,6 +8,206 @@ window.currentScanLon = null;
 window.currentRoutedServices = null;
 window.lastDispatchedServices = null;
 window.routingPromise = null;
+window._localDatasetCache = null;
+window.currentProfileData = null;
+window.currentLang = localStorage.getItem('raksham_lang') || 'en';
+window.lastEmergencyType = null;
+window.capturedScenePhotoBase64 = null;
+
+// Wake Render backend immediately on page load
+fetch(`${API_BASE_URL}/health`).catch(() => {});
+
+// --- MULTILINGUAL DICTIONARY (EN | বাংলা | हिन्दी) ---
+const I18N = {
+    en: {
+        medical_profile: "Medical Profile",
+        lbl_name: "Name:",
+        lbl_blood: "Blood Group:",
+        lbl_allergies: "Allergies:",
+        lbl_conditions: "Conditions:",
+        contact_info: "Contact Info",
+        lbl_primary: "Primary:",
+        lbl_em1: "Emergency 1:",
+        lbl_em2: "Emergency 2:",
+        lbl_em3: "Emergency 3:",
+        lbl_em4: "Emergency 4:",
+        lbl_em5: "Emergency 5:",
+        lbl_em6: "Emergency 6:",
+        med_history: "Medical History Summary",
+        btn_report: "REPORT EMERGENCY",
+        countdown_title: "ALERTING EMERGENCY CONTACTS IN:",
+        prank_warning: "WARNING: Prank alerts are traced by IP Address.",
+        btn_cancel: "CANCEL ALARM",
+        triage_title: "EMERGENCY TRIGGERED",
+        triage_sub: "Select the situation below to get immediate first-aid instructions:",
+        btn_crash: "CAR CRASH",
+        btn_assault: "PHYSICAL ASSAULT",
+        guidance_title: "IMMEDIATE ACTIONS",
+        btn_authorities: "🚨 ALERT NEAREST AUTHORITIES (HOSPITAL, POLICE & AMBULANCE)",
+        guidance_sub: "Emergency contacts alerted. Stay with the victim.",
+        ai_title: "Raksham AI Assistant",
+        chat_placeholder: "Ask Raksham AI...",
+        btn_send: "Send",
+        offline_title: "Weak/No Internet! Send SOS via 2G Cellular SMS:",
+        btn_offline_sms: "📩 SEND OFFLINE SMS TO FAMILY",
+        btn_call_112: "📞 CALL 112 EMERGENCY",
+        verify_title: "Verify & Dispatch Authorities",
+        verify_desc: "Snap a live photo of the scene (anti-prank verification & visual triage for doctors), then confirm dispatch.",
+        btn_snap_photo: "📸 Snap Live Scene Photo (Camera Only)",
+        btn_confirm_dispatch: "🚨 Confirm & Alert Authorities Now",
+        btn_close_modal: "Cancel",
+        immediate_header: "IMMEDIATE ACTIONS:",
+        speech_lang: "en-IN",
+        steps_crash: [
+            "1. DO NOT move the victim unless they are in immediate danger.",
+            "2. Apply firm, direct pressure to any bleeding wounds.",
+            "3. Keep the victim's head and neck still."
+        ],
+        steps_assault: [
+            "1. Move to a safe location immediately.",
+            "2. Apply direct pressure to stop any bleeding.",
+            "3. Wait for police and ambulance dispatch."
+        ],
+        steps_default: [
+            "1. Check airway, breathing, and circulation.",
+            "2. Do not leave the victim unattended.",
+            "3. Apply firm pressure to any bleeding."
+        ]
+    },
+    bn: {
+        medical_profile: "চিকিৎসা তথ্য",
+        lbl_name: "নাম:",
+        lbl_blood: "রক্তের গ্রুপ:",
+        lbl_allergies: "অ্যালার্জি:",
+        lbl_conditions: "শারীরিক সমস্যা:",
+        contact_info: "জরুরি যোগাযোগ",
+        lbl_primary: "নিজের নম্বর:",
+        lbl_em1: "জরুরি নম্বর ১:",
+        lbl_em2: "জরুরি নম্বর ২:",
+        lbl_em3: "জরুরি নম্বর ৩:",
+        lbl_em4: "জরুরি নম্বর ৪:",
+        lbl_em5: "জরুরি নম্বর ৫:",
+        lbl_em6: "জরুরি নম্বর ৬:",
+        med_history: "মেডিকেল রিপোর্ট সারসংক্ষেপ",
+        btn_report: "জরুরি অবস্থা জানান",
+        countdown_title: "পরিবারকে সতর্ক করা হচ্ছে:",
+        prank_warning: "সতর্কতা: ভুয়া অ্যালার্ট আইপি অ্যাড্রেসের মাধ্যমে শনাক্ত করা হয়।",
+        btn_cancel: "অ্যালার্ম বাতিল করুন",
+        triage_title: "জরুরি অ্যালার্ট চালু হয়েছে",
+        triage_sub: "তাৎক্ষণিক প্রাথমিক চিকিৎসার জন্য পরিস্থিতি বেছে নিন:",
+        btn_crash: "সড়ক দুর্ঘটনা",
+        btn_assault: "শারীরিক আক্রমণ",
+        guidance_title: "তাৎক্ষণিক করণীয়",
+        btn_authorities: "🚨 নিকটতম হাসপাতাল, পুলিশ ও অ্যাম্বুলেন্সকে জানান",
+        guidance_sub: "পরিবারকে জানানো হয়েছে। আহত ব্যক্তির পাশে থাকুন।",
+        ai_title: "রক্ষম এআই সহায়ক",
+        chat_placeholder: "রক্ষম এআই-কে জিজ্ঞাসা করুন...",
+        btn_send: "পাঠান",
+        offline_title: "নেটওয়ার্ক দুর্বল! ইন্টারনেট ছাড়াই SMS পাঠান:",
+        btn_offline_sms: "📩 অফলাইন SMS অ্যালার্ট পাঠান (2G)",
+        btn_call_112: "📞 ১১২ জরুরি নম্বরে কল করুন",
+        verify_title: "যাচাই করে কর্তৃপক্ষকে জানান",
+        verify_desc: "ভুয়া অ্যালার্ট রোধে এবং ডাক্তারের সহায়তার জন্য ঘটনাস্থলের লাইভ ছবি তুলুন, তারপর নিশ্চিত করুন।",
+        btn_snap_photo: "📸 লাইভ ছবি তুলুন (শুধু ক্যামেরা)",
+        btn_confirm_dispatch: "🚨 নিশ্চিত করুন ও অ্যালার্ট পাঠান",
+        btn_close_modal: "বাতিল",
+        immediate_header: "তাৎক্ষণিক করণীয়:",
+        speech_lang: "bn-IN",
+        steps_crash: [
+            "১. বড় বিপদ না থাকলে আহত ব্যক্তিকে নড়াবেন না।",
+            "২. রক্তপাত হলে পরিষ্কার কাপড় দিয়ে জোরে চেপে ধরুন।",
+            "৩. আহত ব্যক্তির মাথা ও ঘাড় স্থির রাখুন।"
+        ],
+        steps_assault: [
+            "১. অবিলম্বে নিরাপদ স্থানে সরে যান।",
+            "২. রক্তপাত বন্ধ করতে ক্ষতস্থানে সরাসরি চাপ দিন।",
+            "৩. পুলিশ ও অ্যাম্বুলেন্স আসা পর্যন্ত অপেক্ষা করুন।"
+        ],
+        steps_default: [
+            "১. শ্বাস-প্রশ্বাস ও জ্ঞান আছে কিনা পরীক্ষা করুন।",
+            "২. আহত ব্যক্তিকে একা ছেড়ে যাবেন না।",
+            "৩. রক্তপাত হলে সরাসরি চাপ দিয়ে ধরে রাখুন।"
+        ]
+    },
+    hi: {
+        medical_profile: "मेडिकल प्रोफ़ाइल",
+        lbl_name: "नाम:",
+        lbl_blood: "ब्लड ग्रुप:",
+        lbl_allergies: "एलर्जी:",
+        lbl_conditions: "बीमारियाँ / स्थितियाँ:",
+        contact_info: "आपातकालीन संपर्क",
+        lbl_primary: "प्राथमिक नंबर:",
+        lbl_em1: "इमरजेंसी 1:",
+        lbl_em2: "इमरजेंसी 2:",
+        lbl_em3: "इमरजेंसी 3:",
+        lbl_em4: "इमरजेंसी 4:",
+        lbl_em5: "इमरजेंसी 5:",
+        lbl_em6: "इमरजेंसी 6:",
+        med_history: "मेडिकल रिपोर्ट सारांश",
+        btn_report: "इमरजेंसी रिपोर्ट करें",
+        countdown_title: "परिवार को अलर्ट भेजा जा रहा है:",
+        prank_warning: "चेतावनी: फ़र्ज़ी अलर्ट IP एड्रेस से ट्रैक किए जाते हैं।",
+        btn_cancel: "अलार्म रद्द करें",
+        triage_title: "इमरजेंसी अलर्ट सक्रिय",
+        triage_sub: "तुरंत प्राथमिक उपचार (First-Aid) के लिए स्थिति चुनें:",
+        btn_crash: "सड़क दुर्घटना",
+        btn_assault: "शारीरिक हमला",
+        guidance_title: "तुरंत करने योग्य कदम",
+        btn_authorities: "🚨 नज़दीकी अस्पताल, पुलिस और एम्बुलेंस को अलर्ट करें",
+        guidance_sub: "आपातकालीन संपर्कों को सूचित कर दिया गया है। पीड़ित के साथ रहें।",
+        ai_title: "रक्षम AI सहायक",
+        chat_placeholder: "रक्षम AI से पूछें...",
+        btn_send: "भेजें",
+        offline_title: "कमज़ोर नेटवर्क! बिना इंटरनेट SMS भेजें:",
+        btn_offline_sms: "📩 ऑफ़लाइन SMS SOS भेजें (2G)",
+        btn_call_112: "📞 112 पर कॉल करें",
+        verify_title: "सत्यापित करें और अलर्ट भेजें",
+        verify_desc: "फ़र्ज़ी अलर्ट रोकने और डॉक्टरों की मदद के लिए घटनास्थल की लाइव फ़ोटो लें, फिर पुष्टि करें।",
+        btn_snap_photo: "📸 लाइव फ़ोटो लें (केवल कैमरा)",
+        btn_confirm_dispatch: "🚨 पुष्टि करें और अलर्ट भेजें",
+        btn_close_modal: "रद्द करें",
+        immediate_header: "तुरंत करने योग्य कदम:",
+        speech_lang: "hi-IN",
+        steps_crash: [
+            "1. जब तक कोई बड़ा ख़तरा न हो, घायल को न हिलाएं।",
+            "2. खून बहने पर साफ़ कपड़े से सीधा दबाव डालें।",
+            "3. घायल का सिर और गर्दन बिल्कुल स्थिर रखें।"
+        ],
+        steps_assault: [
+            "1. तुरंत किसी सुरक्षित स्थान पर जाएं।",
+            "2. खून रोकने के लिए घाव पर सीधा दबाव डालें।",
+            "3. पुलिस और एम्बुलेंस के आने तक इंतज़ार करें।"
+        ],
+        steps_default: [
+            "1. सांस और होश की जांच करें।",
+            "2. पीड़ित को अकेला न छोड़ें।",
+            "3. खून बहने पर सीधा दबाव बनाए रखें।"
+        ]
+    }
+};
+
+function setLanguage(lang) {
+    if (!I18N[lang]) lang = 'en';
+    window.currentLang = lang;
+    localStorage.setItem('raksham_lang', lang);
+
+    const dict = I18N[lang];
+    document.querySelectorAll('.lang-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.lang === lang);
+    });
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) el.innerText = dict[key];
+    });
+
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput && dict.chat_placeholder) chatInput.placeholder = dict.chat_placeholder;
+
+    // Re-render guidance card immediately if already on guidance screen
+    if (window.currentRoutedServices && window.lastEmergencyType) {
+        renderInstantGuidance(window.currentRoutedServices, window.lastEmergencyType);
+    }
+}
 
 async function fetchAndDisplayData() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -15,11 +215,24 @@ async function fetchAndDisplayData() {
     const userEmail = localStorage.getItem('raksham_user_email');
 
     if (isIndexPage && emergencyId) {
+        const cacheKey = `raksham_cached_profile_${emergencyId}`;
         try {
             let response = await fetch(`${API_BASE_URL}/profile/${emergencyId}`);
             let data = await response.json();
-            if (!data.error) populateIndexDOM(data);
-        } catch (error) { console.error(error); }
+            if (!data.error) {
+                window.currentProfileData = data;
+                localStorage.setItem(cacheKey, JSON.stringify(data));
+                populateIndexDOM(data);
+            }
+        } catch (error) {
+            // Load cached victim data if opened in low-signal area
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+                window.currentProfileData = JSON.parse(cached);
+                populateIndexDOM(window.currentProfileData);
+            }
+            console.error(error);
+        }
     }
     else if (isProfilePage && userEmail) {
         try {
@@ -78,22 +291,52 @@ function populateProfileDOM(data) {
     setInput('e-em4', data.em4); setInput('e-em5', data.em5); setInput('e-em6', data.em6);
 }
 
-// --- FAST BACKEND BALLTREE + OSRM ROUTER ---
+// --- OFFLINE 2G CELLULAR SMS SOS FALLBACK ---
+function showOfflineSmsFallback(lat, lon) {
+    const box = document.getElementById('offline-sos-box');
+    const smsLink = document.getElementById('offline-sms-link');
+    if (!box || !smsLink) return;
+
+    const p = window.currentProfileData || {};
+    const contacts = [p.em1, p.em2, p.em3, p.em4, p.em5, p.em6]
+        .map((c) => (c || '').replace(/[^0-9+]/g, ''))
+        .filter((c) => c.length >= 5);
+
+    const recipients = contacts.length ? contacts.join(',') : '112';
+    const gpsText = (lat != null && lon != null)
+        ? `https://maps.google.com/?q=${lat},${lon}`
+        : "GPS unavailable";
+    const body = encodeURIComponent(
+        `RAKSHAM EMERGENCY SOS! Victim: ${p.name || 'Unknown'} (Blood: ${p.blood_group || 'N/A'}). Needs urgent help at: ${gpsText}`
+    );
+
+    const sep = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? '&' : '?';
+    smsLink.href = `sms:${recipients}${sep}body=${body}`;
+    box.classList.remove('hidden');
+}
+
+// --- FAST ROUTER: RENDER BALLTREE+OSRM (3.5s CAP) + INSTANT VERCEL EDGE FALLBACK ---
+function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function buildFallbackServices(lat, lon) {
     return {
         hospital: {
-            name: "Emergency Hospital",
-            phone: "112",
+            name: "Emergency Hospital", phone: "112",
             html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Emergency Hospital</span><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@${lat},${lon},15z' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
         },
         police_station: {
-            name: "Local Police",
-            phone: "100",
+            name: "Local Police", phone: "100",
             html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Local Police</span><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/search/police/@${lat},${lon},15z' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
         },
         ambulance: {
-            name: "108 Emergency Ambulance",
-            phone: "108",
+            name: "108 Emergency Ambulance", phone: "108",
             html: `<span style='color:#333; font-weight:bold; font-size:16px;'>108 Emergency Ambulance</span><br>📞 <a href='tel:108' style='color:#FF003C;'>108</a>`
         }
     };
@@ -102,16 +345,15 @@ function buildFallbackServices(lat, lon) {
 function normalizeBackendService(svc, defaultName, defaultPhone, lat, lon) {
     if (!svc) {
         return {
-            name: defaultName,
-            phone: defaultPhone,
+            name: defaultName, phone: defaultPhone,
             html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${defaultName}</span><br>📞 <a href='tel:${defaultPhone}' style='color:#FF003C;'>${defaultPhone}</a>`
         };
     }
     const phone = svc.sms_mobile || svc.landline || defaultPhone;
     const distLine = svc.road_km != null
-        ? `📍 Road: <strong>${svc.road_km} km</strong>${svc.eta_min != null ? ` (~${svc.eta_min} min)` : ""}`
+        ? `📍 Distance: <strong>${svc.road_km} km</strong>${svc.eta_min != null ? ` (~${svc.eta_min} min)` : ""}`
         : `📍 <strong style='color:green;'>Location Locked</strong>`;
-    const dirUrl = svc.google_maps_directions || `https://www.google.com/maps/search/${encodeURIComponent(defaultName)}/@${lat},${lon},15z`;
+    const dirUrl = svc.google_maps_directions || `https://www.google.com/maps/dir/?api=1&destination=${svc.lat},${svc.lon}&travelmode=driving`;
 
     return {
         ...svc,
@@ -121,12 +363,47 @@ function normalizeBackendService(svc, defaultName, defaultPhone, lat, lon) {
     };
 }
 
+async function routeFromVercelEdgeDataset(lat, lon) {
+    try {
+        if (!window._localDatasetCache) {
+            const res = await fetch(`./data/emergency_services.json?v=3`);
+            if (!res.ok) return null;
+            const json = await res.json();
+            window._localDatasetCache = json.services || [];
+        }
+        const items = window._localDatasetCache;
+        const findClosest = (cat) => {
+            let best = null, bestKm = 35.0;
+            for (const s of items) {
+                if (s.category !== cat || s.lat == null || s.lon == null) continue;
+                const km = haversineKm(lat, lon, s.lat, s.lon);
+                if (km < bestKm) { bestKm = km; best = s; }
+            }
+            if (!best) return null;
+            return { ...best, road_km: Number(bestKm.toFixed(2)), eta_min: null, routing_method: "Edge Spatial Cache" };
+        };
+
+        const h = findClosest("hospital");
+        const p = findClosest("police_station");
+        const a = findClosest("ambulance");
+        if (!h && !p && !a) return null;
+
+        return {
+            hospital: normalizeBackendService(h, "Emergency Hospital", "112", lat, lon),
+            police_station: normalizeBackendService(p, "Local Police", "100", lat, lon),
+            ambulance: normalizeBackendService(a, "108 Emergency Ambulance", "108", lat, lon)
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
 function startPreRouting(lat, lon) {
     if (window.routingPromise) return window.routingPromise;
 
     window.routingPromise = (async () => {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 8000);
+        const timer = setTimeout(() => controller.abort(), 3500);
         try {
             const res = await fetch(`${API_BASE_URL}/nearest_services`, {
                 method: 'POST',
@@ -150,8 +427,15 @@ function startPreRouting(lat, lon) {
             }
         } catch (e) {
             clearTimeout(timer);
-            console.warn("Backend router timed out or failed, using instant helpline fallback.", e);
         }
+
+        const edgeResult = await routeFromVercelEdgeDataset(lat, lon);
+        if (edgeResult) {
+            window.currentRoutedServices = edgeResult;
+            window.lastDispatchedServices = edgeResult;
+            return edgeResult;
+        }
+
         const fallback = buildFallbackServices(lat, lon);
         window.currentRoutedServices = fallback;
         window.lastDispatchedServices = fallback;
@@ -161,12 +445,32 @@ function startPreRouting(lat, lon) {
     return window.routingPromise;
 }
 
+function getLocalFirstAidSteps(emergencyType) {
+    const dict = I18N[window.currentLang] || I18N.en;
+    const s = (emergencyType || "").toLowerCase();
+    if (s.includes("crash") || s.includes("accident")) return dict.steps_crash;
+    if (s.includes("assault")) return dict.steps_assault;
+    return dict.steps_default;
+}
+
+function renderInstantGuidance(services, emergencyType) {
+    const outputDiv = document.getElementById('ai-suggestions');
+    if (!outputDiv) return;
+    const dict = I18N[window.currentLang] || I18N.en;
+    outputDiv.innerHTML = [
+        `<strong>🏥 ${services.hospital.html}</strong>`,
+        `<strong>🚓 ${services.police_station.html}</strong>`,
+        `<strong>🚑 ${services.ambulance.html}</strong>`,
+        `<strong style='color:#FF003C;'>${dict.immediate_header}</strong><br>${getLocalFirstAidSteps(emergencyType).join("<br>")}`
+    ].join("<br><br>");
+}
+
 let countdownInterval;
 function startCountdown() {
     document.getElementById('main-screen').style.display = 'none';
     document.getElementById('countdown-screen').classList.remove('hidden');
     document.getElementById('countdown-screen').style.display = 'block';
-    let timeLeft = 10;
+    let timeLeft = 5;
     document.getElementById('timer-display').innerText = timeLeft;
     countdownInterval = setInterval(() => {
         timeLeft--;
@@ -187,6 +491,7 @@ function cancelEmergency() {
 }
 
 async function sendTriage(emergencyType) {
+    window.lastEmergencyType = emergencyType;
     document.getElementById('triage-screen').style.display = 'none';
     document.getElementById('guidance-screen').classList.remove('hidden');
     document.getElementById('guidance-screen').style.display = 'block';
@@ -195,13 +500,13 @@ async function sendTriage(emergencyType) {
     if (chatBox) chatBox.style.display = 'block';
 
     const outputDiv = document.getElementById('ai-suggestions');
-    outputDiv.innerHTML = "<span style='color:#333;'>Loading nearest hospital, police & ambulance...</span>";
+    outputDiv.innerHTML = "<span style='color:#333;'>Finding nearest hospital, police & ambulance...</span>";
 
     let lat = window.currentScanLat, lon = window.currentScanLon;
     if (lat == null || lon == null) {
         try {
             const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 5000, maximumAge: 120000 });
             });
             lat = position.coords.latitude;
             lon = position.coords.longitude;
@@ -214,23 +519,30 @@ async function sendTriage(emergencyType) {
     const userId = urlParams.get('id') || "unknown_scan";
 
     if (lat != null && lon != null) {
-        // Reuse pre-routed result (instant if already resolved during countdown)
         const services = window.currentRoutedServices || await startPreRouting(lat, lon);
+        renderInstantGuidance(services, emergencyType);
 
-        // Render routed services immediately while triage text loads
-        outputDiv.innerHTML = [
-            `<strong>🏥 ${services.hospital.html}</strong>`,
-            `<strong>🚓 ${services.police_station.html}</strong>`,
-            `<strong>🚑 ${services.ambulance.html}</strong>`,
-            `<br><em style="color:#555;">Loading first-aid steps...</em>`
-        ].join("<br><br>");
-
-        // Fire family emergency contacts SMS in background
-        fetch(`${API_BASE_URL}/trigger_emergency`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId, latitude: lat, longitude: lon, services: services })
-        }).catch(() => {});
+        // Trigger family + Victim Kill-Switch SMS; if Render fails/offline, reveal 2G Offline SMS button
+        if (!navigator.onLine) {
+            showOfflineSmsFallback(lat, lon);
+        } else {
+            const triggerController = new AbortController();
+            const triggerTimer = setTimeout(() => triggerController.abort(), 4500);
+            fetch(`${API_BASE_URL}/trigger_emergency`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, latitude: lat, longitude: lon, services: services }),
+                signal: triggerController.signal
+            })
+                .then((r) => {
+                    clearTimeout(triggerTimer);
+                    if (!r.ok) showOfflineSmsFallback(lat, lon);
+                })
+                .catch(() => {
+                    clearTimeout(triggerTimer);
+                    showOfflineSmsFallback(lat, lon);
+                });
+        }
 
         if (navigator.geolocation) {
             navigator.geolocation.watchPosition((pos) => {
@@ -244,30 +556,36 @@ async function sendTriage(emergencyType) {
             }, () => {}, { enableHighAccuracy: true, maximumAge: 10000 });
         }
 
+        const triageController = new AbortController();
+        const triageTimer = setTimeout(() => triageController.abort(), 3000);
         try {
             let triageRes = await fetch(`${API_BASE_URL}/ai_triage`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: emergencyType, services: services, latitude: lat, longitude: lon })
+                body: JSON.stringify({ type: emergencyType, services: services, latitude: lat, longitude: lon, lang: window.currentLang }),
+                signal: triageController.signal
             });
+            clearTimeout(triageTimer);
             let triageData = await triageRes.json();
             if (triageData.suggestions) {
                 outputDiv.innerHTML = triageData.suggestions.join("<br><br>");
             }
         } catch (e) {
-            console.warn("AI triage request failed:", e);
+            clearTimeout(triageTimer);
         }
     } else {
-        outputDiv.innerHTML = "<span style='color:red;'>GPS denied. Enable location or call 112 immediately.</span>";
+        showOfflineSmsFallback(null, null);
+        outputDiv.innerHTML = "<span style='color:red;'>GPS denied. Use the Offline SMS button above or call 112 immediately.</span>";
     }
 }
 
-// VOICE CHATBOT
+// --- VOICE CHATBOT (SYNCED WITH ACTIVE LANGUAGE) ---
 function startVoiceRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return alert("Voice input is not supported in this browser.");
     const recognition = new SpeechRecognition();
-    recognition.lang = 'en-IN'; recognition.interimResults = false;
+    recognition.lang = (I18N[window.currentLang] || I18N.en).speech_lang;
+    recognition.interimResults = false;
     const micBtn = document.getElementById('mic-btn');
     const originalBg = micBtn.style.background;
     micBtn.style.background = '#FF003C';
@@ -284,7 +602,8 @@ function speakText(text) {
     window.speechSynthesis.cancel();
     const cleanText = text.replace(/<\/?[^>]+(>|$)/g, "").replace(/[*_#]/g, "");
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'en-IN'; utterance.rate = 1.05;
+    utterance.lang = (I18N[window.currentLang] || I18N.en).speech_lang;
+    utterance.rate = 1.05;
     window.speechSynthesis.speak(utterance);
 }
 
@@ -336,9 +655,7 @@ function closeMenu() { document.getElementById('edit-menu').style.display = 'non
 
 function togglePasswordVisibility(inputId) {
     const passwordInput = document.getElementById(inputId);
-    if (passwordInput) {
-        passwordInput.type = passwordInput.type === "password" ? "text" : "password";
-    }
+    if (passwordInput) passwordInput.type = passwordInput.type === "password" ? "text" : "password";
 }
 
 async function saveProfile() {
@@ -371,8 +688,8 @@ async function attemptLogin() {
 }
 function logout() { localStorage.removeItem('raksham_user_email'); window.location.href = 'login.html'; }
 
-// MEDICAL REPORT
-function resizeImageClientSide(file, maxWidth = 1200, quality = 0.7) {
+// IMAGE COMPRESSION & MEDICAL REPORT
+function resizeImageClientSide(file, maxWidth = 1000, quality = 0.65) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -389,19 +706,21 @@ function resizeImageClientSide(file, maxWidth = 1200, quality = 0.7) {
         reader.onerror = reject; reader.readAsDataURL(file);
     });
 }
+
 async function uploadMedicalReport() {
     const fileInput = document.getElementById('e-report-upload'), previewDiv = document.getElementById('report-summary-preview'), userEmail = localStorage.getItem('raksham_user_email');
     if (!fileInput || !fileInput.files[0]) return alert("Please choose an image.");
     if (!userEmail) return alert("You must be logged in.");
     if (previewDiv) previewDiv.innerHTML = "<em>Uploading & analyzing report...</em>";
     try {
-        const resizedBase64 = await resizeImageClientSide(fileInput.files[0]);
+        const resizedBase64 = await resizeImageClientSide(fileInput.files[0], 1200, 0.7);
         let response = await fetch(`${API_BASE_URL}/upload_medical_report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, image_base64: resizedBase64 }) });
         let data = await response.json();
         if (data.error && previewDiv) previewDiv.innerHTML = `<span style="color:red;">${data.error}</span>`;
         else if (previewDiv) previewDiv.innerText = data.summary;
     } catch (error) { if (previewDiv) previewDiv.innerHTML = `<span style="color:red;">Upload failed.</span>`; }
 }
+
 async function setMedicalVisibility(showSummary) {
     const userEmail = localStorage.getItem('raksham_user_email');
     if (!userEmail) return;
@@ -410,10 +729,7 @@ async function setMedicalVisibility(showSummary) {
 
 // --- SCAN LOCATION PROMPT ---
 function requestScanLocation(onSuccess) {
-    if (!("geolocation" in navigator)) {
-        alert("Geolocation is not supported on this device.");
-        return;
-    }
+    if (!("geolocation" in navigator)) return;
     const showLocationOverlay = (isDenied = false) => {
         if (document.getElementById("raksham-loc-overlay")) return;
         const overlay = document.createElement("div");
@@ -444,14 +760,9 @@ function requestScanLocation(onSuccess) {
     };
     const triggerGeo = () => {
         navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                removeOverlay();
-                onSuccess(pos.coords.latitude, pos.coords.longitude);
-            },
-            (err) => {
-                showLocationOverlay(err.code === err.PERMISSION_DENIED);
-            },
-            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+            (pos) => { removeOverlay(); onSuccess(pos.coords.latitude, pos.coords.longitude); },
+            (err) => { showLocationOverlay(err.code === err.PERMISSION_DENIED); },
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: 120000 }
         );
     };
     if (navigator.permissions) {
@@ -466,8 +777,42 @@ function requestScanLocation(onSuccess) {
     }
 }
 
-// --- EXPLICIT AUTHORITY DISPATCH BUTTON (IMMEDIATE ACTIONS PAGE) ---
-async function alertNearestAuthorities() {
+// --- BYSTANDER LIVE-CAMERA VERIFICATION & AUTHORITY DISPATCH ---
+function openAuthorityVerifyModal() {
+    window.capturedScenePhotoBase64 = null;
+    const preview = document.getElementById("scene-photo-preview");
+    const fileInput = document.getElementById("live-scene-camera");
+    if (preview) { preview.src = ""; preview.classList.add("hidden"); }
+    if (fileInput) fileInput.value = "";
+    document.getElementById("authority-verify-modal")?.classList.remove("hidden");
+}
+
+function closeAuthorityVerifyModal() {
+    document.getElementById("authority-verify-modal")?.classList.add("hidden");
+}
+
+async function handleScenePhotoCapture(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+        const compressed = await resizeImageClientSide(file, 800, 0.6);
+        window.capturedScenePhotoBase64 = compressed;
+        const preview = document.getElementById("scene-photo-preview");
+        if (preview) {
+            preview.src = compressed;
+            preview.classList.remove("hidden");
+        }
+    } catch (e) {
+        console.warn("Could not compress scene photo:", e);
+    }
+}
+
+async function confirmAuthorityDispatch() {
+    closeAuthorityVerifyModal();
+    await alertNearestAuthorities(window.capturedScenePhotoBase64);
+}
+
+async function alertNearestAuthorities(scenePhotoBase64 = null) {
     const params = new URLSearchParams(window.location.search);
     const userId = params.get("id");
     const btn = document.getElementById("btn-alert-authorities");
@@ -475,22 +820,17 @@ async function alertNearestAuthorities() {
 
     if (!userId) return;
 
-    const confirmed = confirm(
-        "This will send live emergency SMS and email alerts to the nearest Hospital, Police Station, and Ambulance. Proceed?"
-    );
-    if (!confirmed) return;
-
     btn.disabled = true;
     btn.textContent = "Dispatching Alerts to Authorities...";
 
     if (window.currentScanLat == null || window.currentScanLon == null) {
         try {
             const pos = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 5000, maximumAge: 120000 });
             });
             window.currentScanLat = pos.coords.latitude;
             window.currentScanLon = pos.coords.longitude;
-        } catch (e) { console.warn("GPS unavailable during authority dispatch"); }
+        } catch (e) {}
     }
 
     try {
@@ -501,27 +841,21 @@ async function alertNearestAuthorities() {
                 user_id: userId,
                 latitude: window.currentScanLat ?? null,
                 longitude: window.currentScanLon ?? null,
-                services: window.currentRoutedServices || window.lastDispatchedServices || {}
+                services: window.currentRoutedServices || window.lastDispatchedServices || {},
+                scene_photo_base64: scenePhotoBase64 || null
             })
         });
         const data = await resp.json();
 
         if (data.status === "Authorities Alerted") {
-            btn.textContent = "✅ Authorities Alerted";
+            btn.textContent = data.photo_attached ? "✅ Authorities Alerted (Scene Photo Sent)" : "✅ Authorities Alerted";
             btn.style.background = "#2e7d32";
 
             let lines = [];
-            if (data.sms_notified?.length) {
-                lines.push("SMS sent to: " + data.sms_notified.map(x => x.name).join(", "));
-            }
-            if (data.email_notified?.length) {
-                lines.push("Email sent to: " + data.email_notified.map(x => x.name).join(", "));
-            }
+            if (data.sms_notified?.length) lines.push("SMS sent to: " + data.sms_notified.map(x => x.name).join(", "));
+            if (data.email_notified?.length) lines.push("Email sent to: " + data.email_notified.map(x => x.name).join(", "));
             if (data.call_only?.length) {
-                lines.push(
-                    "Direct call needed: " +
-                    data.call_only.map(x => `${x.name} (<a href="tel:${x.phone}">${x.phone}</a>)`).join(", ")
-                );
+                lines.push("Direct call needed: " + data.call_only.map(x => `${x.name} (<a href="tel:${x.phone}">${x.phone}</a>)`).join(", "));
             }
             statusEl.innerHTML = lines.join("<br>");
         } else {
@@ -529,12 +863,15 @@ async function alertNearestAuthorities() {
         }
     } catch (err) {
         btn.disabled = false;
-        btn.textContent = "🚨 Retry Alerting Nearest Authorities";
-        statusEl.innerHTML = `<span style="color:#ff5252;">Could not alert authorities. Call 112 / 108 directly.</span>`;
+        btn.textContent = "Retry Alerting Nearest Authorities";
+        showOfflineSmsFallback(window.currentScanLat, window.currentScanLon);
+        statusEl.innerHTML = `<span style="color:#ff5252;">Network weak. Use Offline SMS above or call 112 / 108 directly.</span>`;
     }
 }
 
 window.onload = () => {
+    setLanguage(window.currentLang);
+
     const params = new URLSearchParams(window.location.search);
     const isTrackPage = window.location.pathname.includes("track.html");
     const emergencyId = params.get("id");
@@ -544,10 +881,7 @@ window.onload = () => {
         requestScanLocation((lat, lon) => {
             window.currentScanLat = lat;
             window.currentScanLon = lon;
-
-            // Start BallTree + OSRM routing immediately in background
             startPreRouting(lat, lon);
-
             fetch(`${API_BASE_URL}/update_location`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
