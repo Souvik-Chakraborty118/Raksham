@@ -935,3 +935,119 @@ window.onload = () => {
         fetchAndDisplayData();
     }
 };
+// === LIVE EMERGENCY TRACKING PAGE (track.html) ===
+document.addEventListener("DOMContentLoaded", () => {
+    if (!window.location.pathname.includes("track.html")) return;
+
+    const trackApiBase = typeof API_BASE_URL !== "undefined"
+        ? API_BASE_URL
+        : "https://raksham-api-zdv4.onrender.com";
+
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get("id");
+    const initialLat = parseFloat(params.get("lat"));
+    const initialLon = parseFloat(params.get("lon"));
+
+    const statusMain = document.getElementById("track-status-main");
+    const statusSub = document.getElementById("track-status-sub");
+    const mapBox = document.getElementById("track-map-box");
+    const coordsDisplay = document.getElementById("track-coords-display");
+    const mapsNavBtn = document.getElementById("track-maps-btn");
+
+    let trackMap = null;
+    let trackMarker = null;
+    let hasAnyFix = false;
+    let pollAttempts = 0;
+
+    function renderTrackedLocation(lat, lon, sourceLabel) {
+        hasAnyFix = true;
+        const latFixed = Number(lat).toFixed(6);
+        const lonFixed = Number(lon).toFixed(6);
+        const nowStr = new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+        });
+
+        if (statusMain) statusMain.textContent = "🟢 Victim GPS Signal Locked";
+        if (statusSub) statusSub.textContent = `${sourceLabel} • Last updated: ${nowStr}`;
+
+        if (mapBox) mapBox.classList.remove("track-hidden");
+        if (coordsDisplay) coordsDisplay.textContent = `📍 Lat: ${latFixed}, Lon: ${lonFixed}`;
+
+        if (mapsNavBtn) {
+            mapsNavBtn.href = `https://www.google.com/maps/dir/?api=1&destination=${latFixed},${lonFixed}&travelmode=driving`;
+            mapsNavBtn.classList.remove("track-hidden");
+        }
+
+        if (typeof L !== "undefined") {
+            try {
+                if (!trackMap) {
+                    trackMap = L.map("live-map").setView([lat, lon], 16);
+                    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                        maxZoom: 19,
+                        attribution: "&copy; OpenStreetMap"
+                    }).addTo(trackMap);
+                    trackMarker = L.marker([lat, lon]).addTo(trackMap).bindPopup(" Victim Location").openPopup();
+                } else {
+                    trackMarker.setLatLng([lat, lon]);
+                    trackMap.panTo([lat, lon], { animate: true });
+                }
+                setTimeout(() => trackMap && trackMap.invalidateSize(), 150);
+            } catch (err) {
+                console.warn("Map render error:", err);
+            }
+        }
+    }
+
+    async function pollLiveLocation() {
+        if (!userId) {
+            if (statusMain) statusMain.textContent = "🔴 Invalid Tracking Link";
+            if (statusSub) statusSub.textContent = "No Raksham emergency ID found in URL.";
+            return;
+        }
+
+        pollAttempts++;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        try {
+            const res = await fetch(`${trackApiBase}/get_location/${encodeURIComponent(userId)}`, {
+                signal: controller.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                const payload = await res.json();
+                const loc = payload.data || payload;
+                if (payload.status === "success" && loc && loc.lat != null && loc.lon != null) {
+                    renderTrackedLocation(loc.lat, loc.lon, "Live GPS stream active");
+                } else if (!hasAnyFix) {
+                    if (statusMain) statusMain.textContent = "🟡 Waiting for active GPS stream...";
+                    if (statusSub) statusSub.textContent = "Server online — waiting for victim's device to send coordinates.";
+                }
+            }
+        } catch (err) {
+            clearTimeout(timeoutId);
+            if (!hasAnyFix) {
+                if (statusMain) statusMain.textContent = "🟡 Waking live tracking server...";
+                if (statusSub) {
+                    statusSub.textContent = pollAttempts <= 2
+                        ? "Connecting to Raksham cloud (may take a few seconds)..."
+                        : "Still reconnecting — keep this page open or use the Incident Pin link in the SMS.";
+                }
+            }
+        }
+
+        setTimeout(pollLiveLocation, 4000);
+    }
+
+    // 1. Instant <1s map render from URL coordinates (zero wait on Render)
+    if (Number.isFinite(initialLat) && Number.isFinite(initialLon)) {
+        renderTrackedLocation(initialLat, initialLon, "Exact scan pin loaded instantly (syncing live updates...)");
+    }
+
+    // 2. Poll Render every 4s for live movement updates
+    pollLiveLocation();
+});
