@@ -599,3 +599,7 @@ button[style*="background:#FF003C"], .emergency-btn {
     font-weight: 700;
     font-size: 14px;
 }
+#live-map,
+#live-map div {
+    animation: none !important;
+}
