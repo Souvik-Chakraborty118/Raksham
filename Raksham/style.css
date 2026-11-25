@@ -498,3 +498,104 @@ button[style*="background:#FF003C"], .emergency-btn {
 .toggle-row input[type="checkbox"]:checked::before {
     transform: translateX(18px);
 }
+/* === LIVE EMERGENCY TRACKING PAGE (track.html) === */
+.track-hidden {
+    display: none !important;
+}
+
+.track-wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 18px 14px 30px;
+    text-align: center;
+}
+
+.track-logo {
+    width: 84px;
+    height: 84px;
+    object-fit: contain;
+    border-radius: 16px;
+    background: #ffffff;
+    padding: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    margin-bottom: 10px;
+}
+
+.track-title {
+    color: #FF003C;
+    font-weight: 900;
+    font-size: 24px;
+    line-height: 1.25;
+    margin: 6px 0 16px;
+    text-transform: uppercase;
+}
+
+.track-status-card {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 16px 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    margin-bottom: 14px;
+    font-weight: 700;
+    font-size: 15px;
+    color: #18181b;
+}
+
+.track-status-sub {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #52525b;
+}
+
+.track-map-box {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    margin-bottom: 14px;
+}
+
+#live-map {
+    width: 100%;
+    height: 330px;
+    border-radius: 12px;
+    z-index: 1;
+}
+
+.track-coords {
+    margin-top: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #3f3f46;
+}
+
+.track-actions {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.track-btn-maps {
+    display: block;
+    background: #FF003C;
+    color: #ffffff;
+    text-decoration: none;
+    padding: 14px 16px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 15px;
+    box-shadow: 0 4px 12px rgba(255, 0, 60, 0.35);
+}
+
+.track-btn-112 {
+    display: block;
+    background: #18181b;
+    color: #ffffff;
+    text-decoration: none;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 14px;
+}
