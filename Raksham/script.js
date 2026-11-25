@@ -5,6 +5,8 @@ const isIndexPage = window.location.pathname.includes('index.html') || window.lo
 
 window.currentScanLat = null;
 window.currentScanLon = null;
+window.currentScanAccuracy = Infinity;
+window._geoWatchId = null;
 window.currentRoutedServices = null;
 window.lastDispatchedServices = null;
 window.routingPromise = null;
@@ -503,16 +505,26 @@ async function sendTriage(emergencyType) {
     outputDiv.innerHTML = "<span style='color:#333;'>Finding nearest hospital, police & ambulance...</span>";
 
     let lat = window.currentScanLat, lon = window.currentScanLon;
-    if (lat == null || lon == null) {
+    if (lat == null || lon == null || window.currentScanAccuracy > 80) {
         try {
             const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 5000, maximumAge: 120000 });
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 3000,
+                    maximumAge: 0
+                });
             });
-            lat = position.coords.latitude;
-            lon = position.coords.longitude;
-            window.currentScanLat = lat;
-            window.currentScanLon = lon;
-        } catch (error) { console.warn("GPS Failed"); }
+            const acc = position.coords.accuracy ?? 9999;
+            if (lat == null || acc < window.currentScanAccuracy) {
+                lat = position.coords.latitude;
+                lon = position.coords.longitude;
+                window.currentScanLat = lat;
+                window.currentScanLon = lon;
+                window.currentScanAccuracy = acc;
+                window.routingPromise = null;
+                window.currentRoutedServices = null;
+            }
+        } catch (error) { console.warn("Keeping best available GPS fix"); }
     }
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -759,10 +771,33 @@ function requestScanLocation(onSuccess) {
         if (el) el.remove();
     };
     const triggerGeo = () => {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => { removeOverlay(); onSuccess(pos.coords.latitude, pos.coords.longitude); },
-            (err) => { showLocationOverlay(err.code === err.PERMISSION_DENIED); },
-            { enableHighAccuracy: false, timeout: 5000, maximumAge: 120000 }
+        if (window._geoWatchId !== null) {
+            navigator.geolocation.clearWatch(window._geoWatchId);
+        }
+        window._geoWatchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                removeOverlay();
+                const acc = pos.coords.accuracy ?? 9999;
+                const prevAcc = window.currentScanAccuracy;
+                if (window.currentScanLat == null || acc <= prevAcc + 25) {
+                    const prevLat = window.currentScanLat;
+                    const prevLon = window.currentScanLon;
+                    window.currentScanLat = pos.coords.latitude;
+                    window.currentScanLon = pos.coords.longitude;
+                    window.currentScanAccuracy = acc;
+                    if (prevLat != null && prevLon != null && haversineKm(prevLat, prevLon, pos.coords.latitude, pos.coords.longitude) > 0.15) {
+                        window.routingPromise = null;
+                        window.currentRoutedServices = null;
+                    }
+                    onSuccess(pos.coords.latitude, pos.coords.longitude, acc);
+                }
+            },
+            (err) => {
+                if (window.currentScanLat == null) {
+                    showLocationOverlay(err.code === err.PERMISSION_DENIED);
+                }
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     };
     if (navigator.permissions) {

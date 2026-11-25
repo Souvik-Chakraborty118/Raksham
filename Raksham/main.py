@@ -289,8 +289,19 @@ def send_textbee_sms(recipients: List[str], message: str):
         print(f"TextBee SMS exception: {e}")
 
 #FAMILY SMS + VICTIM "I'M SAFE" KILL-SWITCH SMS
+def normalize_indian_phone(phone: str) -> str:
+    digits = "".join(ch for ch in (phone or "").strip() if ch.isdigit() or ch == "+")
+    if len(digits) == 10 and digits.isdigit():
+        return f"+91{digits}"
+    return digits
+
+
 def send_family_and_killswitch_sms(contacts, services, lat, lon, user_id, victim, safe_token):
-    maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat is not None and lon is not None else "Location unavailable"
+    maps_link = (
+        f"https://www.google.com/maps/search/?api=1&query={lat:.6f},{lon:.6f}"
+        if lat is not None and lon is not None
+        else "Location unavailable"
+    )
     live_link = f"https://raksham-pi.vercel.app/track.html?id={user_id}"
 
     hosp_name = (services.get("hospital") or {}).get("name", "Nearest Hospital")
@@ -301,29 +312,32 @@ def send_family_and_killswitch_sms(contacts, services, lat, lon, user_id, victim
         f"🚨 RAKSHAM CRITICAL ALERT 🚨\n\n"
         f"👤 Victim: {victim.get('name') or 'Unknown Victim'}\n"
         f"🩸 Blood Group: {victim.get('blood_group') or 'N/A'}\n"
-        f"📍 GPS Location: {maps_link}\n"
+        f"📍 Incident Pin: {maps_link}\n"
         f"📡 Live Tracking: {live_link}\n\n"
         f"🏥 Nearest Hospital: {hosp_name}\n"
         f"🚓 Nearest Police: {police_name}\n"
         f"🚑 Nearest Ambulance: {amb_name}\n\n"
         f"⚠️ Immediate medical assistance is required!"
     )
-    send_textbee_sms(contacts, alert_text)
+    clean_contacts = [normalize_indian_phone(c) for c in contacts if c and len(c.strip()) >= 5]
+    send_textbee_sms(clean_contacts, alert_text)
 
-    # Send 1-tap "I'm Safe / False Alarm" Kill-Switch SMS to the victim's own phone
-    victim_phone = (victim.get("phone") or "").strip()
-    if len(victim_phone) >= 5:
+    # Wait 2.5s so TextBee's Android SMS queue doesn't drop the second back-to-back SMS
+    victim_phone = normalize_indian_phone(victim.get("phone") or "")
+    if len(victim_phone) >= 10:
+        time.sleep(2.5)
         safe_url = f"{BACKEND_PUBLIC_URL}/safe/{safe_token}"
         killswitch_text = (
-            f"⚠️ RAKSHAM ALERT TRIGGERED ON YOUR QR TAG\n"
-            f"Your emergency contacts were just notified.\n\n"
-            f"If this was a PRANK or FALSE ALARM, tap below to mark yourself SAFE & notify family immediately:\n"
+            f"RAKSHAM ALERT: Your emergency QR was triggered.\n"
+            f"If you are SAFE (false alarm), open this link and tap Confirm Safe:\n"
             f"{safe_url}"
         )
+        print(f"Sending victim kill-switch SMS to {victim_phone}")
         send_textbee_sms([victim_phone], killswitch_text)
+    else:
+        print(f"Skipped victim kill-switch SMS: invalid phone '{victim.get('phone')}'")
 
 
-#ON-DEMAND AUTHORITIES SMS + SMTP EMAIL WITH LIVE SCENE PHOTO
 def dispatch_authority_alerts(
     services: dict,
     categories: List[str],
@@ -513,6 +527,9 @@ async def get_location(user_id: str):
 @app.post("/trigger_emergency")
 async def trigger_emergency(payload: EmergencyPayload, request: Request, background_tasks: BackgroundTasks):
     """Alerts personal emergency contacts (em1-em6) and texts a 1-tap 'I'm Safe' Kill-Switch link to the victim."""
+    if payload.latitude is not None and payload.longitude is not None:
+        live_locations[payload.user_id] = {"lat": payload.latitude, "lon": payload.longitude, "timestamp": time.time()}
+
     services = payload.services or {}
     if not services and payload.latitude is not None and payload.longitude is not None:
         services = await spatial_router.find_all_nearest(payload.latitude, payload.longitude)
@@ -559,8 +576,8 @@ async def trigger_emergency(payload: EmergencyPayload, request: Request, backgro
     return {"status": "Family Emergency Alert Triggered", "safe_token": safe_token, "services": services}
 
 @app.get("/safe/{token}", response_class=HTMLResponse)
-async def victim_safe_killswitch(token: str, background_tasks: BackgroundTasks):
-    """1-tap Victim 'I'm Safe' Kill-Switch: cancels false alarms and auto-notifies family."""
+async def victim_safe_page(token: str):
+    """Read-only confirmation screen so SMS link-preview bots cannot auto-cancel alerts."""
     entry = active_alert_tokens.get(token)
     if not entry:
         return HTMLResponse(
@@ -569,17 +586,51 @@ async def victim_safe_killswitch(token: str, background_tasks: BackgroundTasks):
             status_code=404,
         )
 
+    if entry["cancelled"]:
+        return HTMLResponse(
+            "<html><body style='font-family:sans-serif;text-align:center;padding:40px;'>"
+            "<h2>✅ Already Marked Safe</h2><p>Your emergency contacts were already notified.</p></body></html>"
+        )
+
+    return HTMLResponse(
+        f"""<!DOCTYPE html>
+        <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Raksham - Confirm You Are Safe</title></head>
+        <body style="font-family:Poppins,sans-serif;background:#f8fafc;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;">
+          <div style="background:#fff;border:2px solid #22c55e;border-radius:16px;padding:28px;max-width:400px;width:100%;text-align:center;box-shadow:0 10px 25px rgba(0,0,0,0.08);">
+            <h2 style="margin:0 0 10px;">Are You Safe?</h2>
+            <p style="font-size:14px;color:#475569;margin-bottom:20px;">
+              Tap below to cancel the active Raksham emergency alert for <strong>{entry['victim_name']}</strong> and notify family that it was a false alarm.
+            </p>
+            <form method="POST" action="/safe/{token}/confirm">
+              <button type="submit" style="background:#16a34a;color:#fff;border:none;padding:14px 20px;border-radius:10px;font-weight:700;font-size:16px;width:100%;cursor:pointer;">
+                ✅ YES, I AM SAFE — CANCEL ALARM
+              </button>
+            </form>
+          </div>
+        </body></html>"""
+    )
+
+
+@app.post("/safe/{token}/confirm", response_class=HTMLResponse)
+async def victim_safe_confirm(token: str, background_tasks: BackgroundTasks):
+    """Cancels alert and texts family ONLY when a human taps the Confirm button."""
+    entry = active_alert_tokens.get(token)
+    if not entry:
+        return HTMLResponse("<h2>Link Expired</h2>", status_code=404)
+
     if not entry["cancelled"]:
         entry["cancelled"] = True
+        clean_contacts = [normalize_indian_phone(c) for c in entry["contacts"] if c and len(c.strip()) >= 5]
         safe_msg = (
             f"✅ RAKSHAM SAFE UPDATE ✅\n\n"
             f"{entry['victim_name']} has confirmed they are SAFE (False Alarm / Accidental Scan).\n"
             f"No emergency assistance is required."
         )
-        background_tasks.add_task(send_textbee_sms, entry["contacts"], safe_msg)
+        background_tasks.add_task(send_textbee_sms, clean_contacts, safe_msg)
 
     return HTMLResponse(
-        f"""<!DOCTYPE html>
+        """<!DOCTYPE html>
         <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Raksham - Confirmed Safe</title></head>
         <body style="font-family:Poppins,sans-serif;background:#f0fdf4;color:#14532d;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;">
@@ -592,6 +643,7 @@ async def victim_safe_killswitch(token: str, background_tasks: BackgroundTasks):
           </div>
         </body></html>"""
     )
+
 
 @app.post("/alert_authorities")
 async def alert_authorities(payload: AuthorityAlertPayload, background_tasks: BackgroundTasks):
