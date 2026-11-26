@@ -258,17 +258,67 @@ async function fetchAndDisplayData() {
     } else if (isProfilePage && !userEmail) window.location.href = 'login.html';
 }
 
-function populateIndexDOM(data) {
-    const setText = (id, text) => { if (document.getElementById(id)) document.getElementById(id).innerText = text || "N/A"; };
-    setText('profile-name', data.name); setText('profile-blood', data.blood_group);
-    setText('profile-allergies', data.allergies); setText('profile-conditions', data.conditions); setText('profile-phone', data.phone);
+function isValidContactValue(val) {
+    if (!val) return false;
+    const cleaned = String(val).trim();
+    if (!cleaned || /^(n\/a|na|none|null|-+)$/i.test(cleaned)) return false;
+    return cleaned.replace(/\D/g, '').length >= 3;
+}
 
-    const setLink = (id, phone) => {
+function populateIndexDOM(data) {
+    const setText = (id, text) => {
         const el = document.getElementById(id);
-        if (el && phone) el.innerHTML = `<a href="tel:${phone}" style="color:#FF003C; font-weight:bold;">${phone}</a>`;
+        if (el) el.innerText = text || "N/A";
     };
-    setLink('profile-em1', data.em1); setLink('profile-em2', data.em2); setLink('profile-em3', data.em3);
-    setLink('profile-em4', data.em4); setLink('profile-em5', data.em5); setLink('profile-em6', data.em6);
+    setText('profile-name', data.name);
+    setText('profile-blood', data.blood_group);
+    setText('profile-allergies', data.allergies);
+    setText('profile-conditions', data.conditions);
+
+    const chipsWrap = document.getElementById('contact-chips-container');
+    if (chipsWrap) {
+        const dict = I18N[window.currentLang] || I18N.en;
+        const phoneSvg = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1C10.61 21 3 13.39 3 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.46.57 3.58a1 1 0 01-.24 1.01l-2.21 2.2z"/></svg>`;
+
+        const slots = [
+            { key: 'lbl_primary', fallback: 'Primary', value: data.phone, primary: true },
+            { key: 'lbl_em1', fallback: 'Emergency 1', value: data.em1 },
+            { key: 'lbl_em2', fallback: 'Emergency 2', value: data.em2 },
+            { key: 'lbl_em3', fallback: 'Emergency 3', value: data.em3 },
+            { key: 'lbl_em4', fallback: 'Emergency 4', value: data.em4 },
+            { key: 'lbl_em5', fallback: 'Emergency 5', value: data.em5 },
+            { key: 'lbl_em6', fallback: 'Emergency 6', value: data.em6 }
+        ];
+
+        const activeSlots = slots.filter((s) => isValidContactValue(s.value));
+
+        if (activeSlots.length === 0) {
+            chipsWrap.innerHTML = `
+                <a href="tel:112" class="contact-chip contact-chip-primary">
+                    <span class="contact-chip-icon">${phoneSvg}</span>
+                    <span class="contact-chip-meta">
+                        <span class="contact-chip-label">Emergency Helpline</span>
+                        <span class="contact-chip-num">112</span>
+                    </span>
+                    <span class="contact-chip-call-tag">Call</span>
+                </a>`;
+        } else {
+            chipsWrap.innerHTML = activeSlots.map((slot) => {
+                const labelText = (dict[slot.key] || slot.fallback).replace(/:$/, '');
+                const numClean = String(slot.value).trim();
+                const telHref = numClean.replace(/[^0-9+]/g, '');
+                return `
+                    <a href="tel:${telHref}" class="contact-chip${slot.primary ? ' contact-chip-primary' : ''}">
+                        <span class="contact-chip-icon">${phoneSvg}</span>
+                        <span class="contact-chip-meta">
+                            <span class="contact-chip-label" data-i18n="${slot.key}">${escapeHtml(labelText)}</span>
+                            <span class="contact-chip-num">${escapeHtml(numClean)}</span>
+                        </span>
+                        <span class="contact-chip-call-tag">Call</span>
+                    </a>`;
+            }).join('');
+        }
+    }
 
     const summaryEl = document.getElementById('profile-medical-summary');
     const summaryBox = document.getElementById('medical-history-box');
@@ -279,7 +329,6 @@ function populateIndexDOM(data) {
         } else if (summaryBox) summaryBox.style.display = 'none';
     }
 }
-
 function populateProfileDOM(data) {
     const setText = (id, text) => { if (document.getElementById(id)) document.getElementById(id).innerText = text || "N/A"; };
     const setInput = (id, text) => { if (document.getElementById(id)) document.getElementById(id).value = text || ""; };
