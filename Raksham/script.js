@@ -200,7 +200,11 @@ function setLanguage(lang) {
     });
     document.querySelectorAll('[data-i18n]').forEach((el) => {
         const key = el.getAttribute('data-i18n');
-        if (dict[key]) el.innerText = dict[key];
+        if (dict[key]) {
+            el.innerText = el.classList.contains('contact-chip-label')
+                ? dict[key].replace(/:$/, '')
+                : dict[key];
+        }
     });
 
     const chatInput = document.getElementById('chat-input');
@@ -228,7 +232,6 @@ async function fetchAndDisplayData() {
                 populateIndexDOM(data);
             }
         } catch (error) {
-            // Load cached victim data if opened in low-signal area
             const cached = localStorage.getItem(cacheKey);
             if (cached) {
                 window.currentProfileData = JSON.parse(cached);
@@ -236,11 +239,11 @@ async function fetchAndDisplayData() {
             }
             console.error(error);
         }
-    }
-    else if (isProfilePage && userEmail) {
+    } else if (isProfilePage && userEmail) {
         try {
             let response = await fetch(`${API_BASE_URL}/retrieve_profile_data`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: userEmail })
             });
             let data = await response.json();
@@ -250,12 +253,20 @@ async function fetchAndDisplayData() {
                 const dlLink = document.getElementById('download-link');
                 const dlBtn = document.getElementById('download-btn');
                 if (qrImg && data.qr_image) {
-                    qrImg.src = data.qr_image; qrImg.style.display = 'block';
-                    dlLink.href = data.qr_image; dlBtn.style.display = 'inline-block';
+                    qrImg.src = data.qr_image;
+                    qrImg.style.display = 'block';
+                    dlLink.href = data.qr_image;
+                    dlBtn.style.display = 'inline-block';
                 }
-            } else window.location.href = 'login.html';
-        } catch (error) { console.error(error); }
-    } else if (isProfilePage && !userEmail) window.location.href = 'login.html';
+            } else {
+                window.location.href = 'login.html';
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    } else if (isProfilePage && !userEmail) {
+        window.location.href = 'login.html';
+    }
 }
 
 function isValidContactValue(val) {
@@ -326,9 +337,12 @@ function populateIndexDOM(data) {
         if (data.medical_summary) {
             summaryEl.innerText = data.medical_summary;
             if (summaryBox) summaryBox.style.display = 'block';
-        } else if (summaryBox) summaryBox.style.display = 'none';
+        } else if (summaryBox) {
+            summaryBox.style.display = 'none';
+        }
     }
 }
+
 function populateProfileDOM(data) {
     const setText = (id, text) => { if (document.getElementById(id)) document.getElementById(id).innerText = text || "N/A"; };
     const setInput = (id, text) => { if (document.getElementById(id)) document.getElementById(id).value = text || ""; };
@@ -381,15 +395,15 @@ function buildFallbackServices(lat, lon) {
     return {
         hospital: {
             name: "Emergency Hospital", phone: "112",
-            html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Emergency Hospital</span><br>📞 <a href='tel:112' style='color:#FF003C;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@${lat},${lon},15z' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
+            html: `<span style='color:#111; font-weight:bold; font-size:16px;'>Emergency Hospital</span><br>📞 <a href='tel:112' style='color:#111; font-weight:700;'>112</a><br>🗺️ <a href='https://www.google.com/maps/search/hospital/@${lat},${lon},15z' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
         },
         police_station: {
             name: "Local Police", phone: "100",
-            html: `<span style='color:#333; font-weight:bold; font-size:16px;'>Local Police</span><br>📞 <a href='tel:100' style='color:#FF003C;'>100</a><br>🗺️ <a href='https://www.google.com/maps/search/police/@${lat},${lon},15z' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
+            html: `<span style='color:#111; font-weight:bold; font-size:16px;'>Local Police</span><br>📞 <a href='tel:100' style='color:#111; font-weight:700;'>100</a><br>🗺️ <a href='https://www.google.com/maps/search/police/@${lat},${lon},15z' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
         },
         ambulance: {
             name: "108 Emergency Ambulance", phone: "108",
-            html: `<span style='color:#333; font-weight:bold; font-size:16px;'>108 Emergency Ambulance</span><br>📞 <a href='tel:108' style='color:#FF003C;'>108</a>`
+            html: `<span style='color:#111; font-weight:bold; font-size:16px;'>108 Emergency Ambulance</span><br>📞 <a href='tel:108' style='color:#111; font-weight:700;'>108</a>`
         }
     };
 }
@@ -398,7 +412,7 @@ function normalizeBackendService(svc, defaultName, defaultPhone, lat, lon) {
     if (!svc) {
         return {
             name: defaultName, phone: defaultPhone,
-            html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${defaultName}</span><br>📞 <a href='tel:${defaultPhone}' style='color:#FF003C;'>${defaultPhone}</a>`
+            html: `<span style='color:#111; font-weight:bold; font-size:16px;'>${defaultName}</span><br>📞 <a href='tel:${defaultPhone}' style='color:#111; font-weight:700;'>${defaultPhone}</a>`
         };
     }
     const phone = svc.sms_mobile || svc.landline || defaultPhone;
@@ -411,7 +425,7 @@ function normalizeBackendService(svc, defaultName, defaultPhone, lat, lon) {
         ...svc,
         name: svc.name || defaultName,
         phone: phone,
-        html: `<span style='color:#333; font-weight:bold; font-size:16px;'>${svc.name || defaultName}</span><br>${distLine}<br>📞 <a href='tel:${phone}' style='color:#FF003C;'>${phone}</a><br>🗺️ <a href='${dirUrl}' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
+        html: `<span style='color:#111; font-weight:bold; font-size:16px;'>${svc.name || defaultName}</span><br>${distLine}<br>📞 <a href='tel:${phone}' style='color:#111; font-weight:700;'>${phone}</a><br>🗺️ <a href='${dirUrl}' target='_blank' rel='noopener' style='color:#0056b3; text-decoration:underline;'>Get Directions</a>`
     };
 }
 
@@ -534,9 +548,9 @@ function renderInstantGuidance(services, emergencyType) {
 
     outputDiv.innerHTML = `
         ${severityHtml}
-        <div class="service-entry-item"> ${services.hospital.html}</div>
-        <div class="service-entry-item"> ${services.police_station.html}</div>
-        <div class="service-entry-item"> ${services.ambulance.html}</div>
+        <div class="service-entry-item">🏥 ${services.hospital.html}</div>
+        <div class="service-entry-item">🚓 ${services.police_station.html}</div>
+        <div class="service-entry-item">🚑 ${services.ambulance.html}</div>
         <div class="first-aid-heading">${escapeHtml(dict.immediate_header)}</div>
         <div class="first-aid-steps">${stepsHtml}</div>
     `;
@@ -559,7 +573,7 @@ function startCountdown() {
         ring.style.transition = 'none';
         ring.style.strokeDasharray = String(COUNTDOWN_RING_CIRCUMFERENCE);
         ring.style.strokeDashoffset = '0';
-        ring.getBoundingClientRect(); // Force reset before animating
+        ring.getBoundingClientRect();
         requestAnimationFrame(() => {
             ring.style.transition = 'stroke-dashoffset 5s linear';
             ring.style.strokeDashoffset = String(COUNTDOWN_RING_CIRCUMFERENCE);
@@ -636,7 +650,6 @@ async function sendTriage(emergencyType) {
         const services = window.currentRoutedServices || await startPreRouting(lat, lon);
         renderInstantGuidance(services, emergencyType);
 
-        // Trigger family + Victim Kill-Switch SMS; if Render fails/offline, reveal 2G Offline SMS button
         if (!navigator.onLine) {
             showOfflineSmsFallback(lat, lon);
         } else {
@@ -734,7 +747,8 @@ async function sendChatMessage() {
     if (!message) return;
 
     chatOutput.innerHTML += `<div class="user-msg"><b>You:</b> ${escapeHtml(message)}</div>`;
-    inputField.value = ""; chatOutput.scrollTop = chatOutput.scrollHeight;
+    inputField.value = "";
+    chatOutput.scrollTop = chatOutput.scrollHeight;
     window.chatHistory.push({ role: 'user', content: message });
 
     const typingId = 'typing-' + Date.now();
@@ -743,8 +757,13 @@ async function sendChatMessage() {
 
     try {
         let response = await fetch(`${API_BASE_URL}/chat`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: message, services: window.lastDispatchedServices || window.currentRoutedServices || {}, history: window.chatHistory.slice(-6) })
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: message,
+                services: window.lastDispatchedServices || window.currentRoutedServices || {},
+                history: window.chatHistory.slice(-6)
+            })
         });
         let data = await response.json();
         document.getElementById(typingId)?.remove();
@@ -761,13 +780,17 @@ async function sendChatMessage() {
 
 function escapeHtml(str) {
     const div = document.createElement('div');
-    div.innerText = str; return div.innerHTML;
+    div.innerText = str;
+    return div.innerHTML;
 }
+
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChatMessage(); });
+    document.getElementById('chat-input')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendChatMessage();
+    });
 });
 
-// MENU & AUTH
+// --- MENU & AUTH ---
 function openMenu() { document.getElementById('edit-menu').style.display = 'block'; }
 function closeMenu() { document.getElementById('edit-menu').style.display = 'none'; }
 
@@ -779,18 +802,74 @@ function togglePasswordVisibility(inputId) {
 async function saveProfile() {
     const payload = {
         current_email: localStorage.getItem('raksham_user_email'),
-        email: document.getElementById('e-email').value.trim(), name: document.getElementById('e-name').value,
-        blood_group: document.getElementById('e-blood').value, allergies: document.getElementById('e-allergies').value,
-        conditions: document.getElementById('e-cond').value, phone: document.getElementById('e-phone').value,
-        em1: document.getElementById('e-em1').value, em2: document.getElementById('e-em2').value,
-        em3: document.getElementById('e-em3').value, em4: document.getElementById('e-em4').value,
-        em5: document.getElementById('e-em5').value, em6: document.getElementById('e-em6').value
+        email: document.getElementById('e-email').value.trim(),
+        name: document.getElementById('e-name').value,
+        blood_group: document.getElementById('e-blood').value,
+        allergies: document.getElementById('e-allergies').value,
+        conditions: document.getElementById('e-cond').value,
+        phone: document.getElementById('e-phone').value,
+        em1: document.getElementById('e-em1').value,
+        em2: document.getElementById('e-em2').value,
+        em3: document.getElementById('e-em3').value,
+        em4: document.getElementById('e-em4').value,
+        em5: document.getElementById('e-em5').value,
+        em6: document.getElementById('e-em6').value
     };
     try {
-        let response = await fetch(`${API_BASE_URL}/update_profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        let response = await fetch(`${API_BASE_URL}/update_profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
         let data = await response.json();
-        if (!data.error) { localStorage.setItem('raksham_user_email', payload.email); window.location.reload(); } else alert(data.error);
-    } catch (error) { alert("Failed to update profile."); }
+        if (!data.error) {
+            localStorage.setItem('raksham_user_email', payload.email);
+            window.location.reload();
+        } else {
+            alert(data.error);
+        }
+    } catch (error) {
+        alert("Failed to update profile.");
+    }
+}
+
+async function registerUser() {
+    const payload = {
+        email: document.getElementById('email')?.value.trim().toLowerCase() || "",
+        password: document.getElementById('password')?.value.trim() || "",
+        name: document.getElementById('name')?.value.trim() || "",
+        blood_group: document.getElementById('blood')?.value.trim() || "",
+        allergies: document.getElementById('allergies')?.value.trim() || "None",
+        conditions: document.getElementById('conditions')?.value.trim() || "None",
+        phone: document.getElementById('phone')?.value.trim() || "",
+        em1: document.getElementById('em1')?.value.trim() || "",
+        em2: document.getElementById('em2')?.value.trim() || "",
+        em3: document.getElementById('em3')?.value.trim() || "",
+        em4: document.getElementById('em4')?.value.trim() || "",
+        em5: document.getElementById('em5')?.value.trim() || "",
+        em6: document.getElementById('em6')?.value.trim() || ""
+    };
+
+    if (!payload.email || !payload.password || !payload.name || !payload.blood_group || !payload.phone || !payload.em1) {
+        return alert("Please fill all required fields (Email, Password, Name, Blood Group, Primary Phone, Emergency Contact 1).");
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (data.error) {
+            alert(data.error);
+        } else {
+            localStorage.setItem('raksham_user_email', payload.email);
+            window.location.href = 'profile.html';
+        }
+    } catch (error) {
+        alert("Registration failed. Please try again.");
+    }
 }
 
 async function attemptLogin() {
@@ -798,15 +877,29 @@ async function attemptLogin() {
     const password = document.getElementById('login-password')?.value.trim();
     if (!email || !password) return alert("Please enter both email and password.");
     try {
-        let response = await fetch(`${API_BASE_URL}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email, password: password }) });
+        let response = await fetch(`${API_BASE_URL}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: password })
+        });
         let data = await response.json();
-        if (data.error) alert(data.error);
-        else { localStorage.setItem('raksham_user_email', email); window.location.href = 'profile.html'; }
-    } catch (error) { alert("Server error."); }
+        if (data.error) {
+            alert(data.error);
+        } else {
+            localStorage.setItem('raksham_user_email', email);
+            window.location.href = 'profile.html';
+        }
+    } catch (error) {
+        alert("Server error.");
+    }
 }
-function logout() { localStorage.removeItem('raksham_user_email'); window.location.href = 'login.html'; }
 
-// IMAGE COMPRESSION & MEDICAL REPORT
+function logout() {
+    localStorage.removeItem('raksham_user_email');
+    window.location.href = 'login.html';
+}
+
+// --- IMAGE COMPRESSION & MEDICAL REPORT ---
 function resizeImageClientSide(file, maxWidth = 1000, quality = 0.65) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -815,37 +908,54 @@ function resizeImageClientSide(file, maxWidth = 1000, quality = 0.65) {
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const scale = Math.min(1, maxWidth / img.width);
-                canvas.width = img.width * scale; canvas.height = img.height * scale;
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
                 canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
                 resolve(canvas.toDataURL('image/jpeg', quality));
             };
-            img.onerror = reject; img.src = e.target.result;
+            img.onerror = reject;
+            img.src = e.target.result;
         };
-        reader.onerror = reject; reader.readAsDataURL(file);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
     });
 }
 
 async function uploadMedicalReport() {
-    const fileInput = document.getElementById('e-report-upload'), previewDiv = document.getElementById('report-summary-preview'), userEmail = localStorage.getItem('raksham_user_email');
+    const fileInput = document.getElementById('e-report-upload');
+    const previewDiv = document.getElementById('report-summary-preview');
+    const userEmail = localStorage.getItem('raksham_user_email');
     if (!fileInput || !fileInput.files[0]) return alert("Please choose an image.");
     if (!userEmail) return alert("You must be logged in.");
     if (previewDiv) previewDiv.innerHTML = "<em>Uploading & analyzing report...</em>";
     try {
         const resizedBase64 = await resizeImageClientSide(fileInput.files[0], 1200, 0.7);
-        let response = await fetch(`${API_BASE_URL}/upload_medical_report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, image_base64: resizedBase64 }) });
+        let response = await fetch(`${API_BASE_URL}/upload_medical_report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: userEmail, image_base64: resizedBase64 })
+        });
         let data = await response.json();
         if (data.error && previewDiv) previewDiv.innerHTML = `<span style="color:red;">${data.error}</span>`;
         else if (previewDiv) previewDiv.innerText = data.summary;
-    } catch (error) { if (previewDiv) previewDiv.innerHTML = `<span style="color:red;">Upload failed.</span>`; }
+    } catch (error) {
+        if (previewDiv) previewDiv.innerHTML = `<span style="color:red;">Upload failed.</span>`;
+    }
 }
 
 async function setMedicalVisibility(showSummary) {
     const userEmail = localStorage.getItem('raksham_user_email');
     if (!userEmail) return;
-    try { await fetch(`${API_BASE_URL}/set_medical_visibility`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, show_medical_summary: showSummary }) }); } catch (error) {}
+    try {
+        await fetch(`${API_BASE_URL}/set_medical_visibility`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: userEmail, show_medical_summary: showSummary })
+        });
+    } catch (error) {}
 }
 
-// --- SCAN LOCATION PROMPT ---
+// --- SCAN LOCATION PROMPT (CONTINUOUS HIGH-ACCURACY GPS) ---
 function requestScanLocation(onSuccess) {
     if (!("geolocation" in navigator)) return;
     const showLocationOverlay = (isDenied = false) => {
@@ -975,7 +1085,11 @@ async function alertNearestAuthorities(scenePhotoBase64 = null) {
     if (window.currentScanLat == null || window.currentScanLon == null) {
         try {
             const pos = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 5000, maximumAge: 120000 });
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 5000,
+                    maximumAge: 0
+                });
             });
             window.currentScanLat = pos.coords.latitude;
             window.currentScanLon = pos.coords.longitude;
@@ -1012,7 +1126,7 @@ async function alertNearestAuthorities(scenePhotoBase64 = null) {
         }
     } catch (err) {
         btn.disabled = false;
-        btn.textContent = "Retry Alerting Nearest Authorities";
+        btn.textContent = "🚨 Retry Alerting Nearest Authorities";
         showOfflineSmsFallback(window.currentScanLat, window.currentScanLon);
         statusEl.innerHTML = `<span style="color:#ff5252;">Network weak. Use Offline SMS above or call 112 / 108 directly.</span>`;
     }
@@ -1041,6 +1155,7 @@ window.onload = () => {
         fetchAndDisplayData();
     }
 };
+
 // === LIVE EMERGENCY TRACKING PAGE (track.html) ===
 document.addEventListener("DOMContentLoaded", () => {
     if (!window.location.pathname.includes("track.html")) return;
@@ -1094,7 +1209,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         maxZoom: 19,
                         attribution: "&copy; OpenStreetMap"
                     }).addTo(trackMap);
-                    trackMarker = L.marker([lat, lon]).addTo(trackMap).bindPopup(" Victim Location").openPopup();
+                    trackMarker = L.marker([lat, lon]).addTo(trackMap).bindPopup("🚨 Victim Location").openPopup();
                 } else {
                     trackMarker.setLatLng([lat, lon]);
                     trackMap.panTo([lat, lon], { animate: true });
