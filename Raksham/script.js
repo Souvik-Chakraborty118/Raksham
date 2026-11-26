@@ -456,25 +456,67 @@ function getLocalFirstAidSteps(emergencyType) {
     return dict.steps_default;
 }
 
+function formatStepNumeral(index) {
+    if (window.currentLang === 'bn') {
+        const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+        return String(index).replace(/\d/g, (d) => bnDigits[Number(d)]);
+    }
+    return String(index);
+}
+
 function renderInstantGuidance(services, emergencyType) {
     const outputDiv = document.getElementById('ai-suggestions');
     if (!outputDiv) return;
     const dict = I18N[window.currentLang] || I18N.en;
-    outputDiv.innerHTML = [
-        `<strong>🏥 ${services.hospital.html}</strong>`,
-        `<strong>🚓 ${services.police_station.html}</strong>`,
-        `<strong>🚑 ${services.ambulance.html}</strong>`,
-        `<strong style='color:#FF003C;'>${dict.immediate_header}</strong><br>${getLocalFirstAidSteps(emergencyType).join("<br>")}`
-    ].join("<br><br>");
+    const steps = getLocalFirstAidSteps(emergencyType);
+
+    const severityHtml = window.lastMlSeverityText
+        ? `<div class="severity-pill">${escapeHtml(window.lastMlSeverityText)}</div>`
+        : '';
+
+    const stepsHtml = steps.map((step, idx) => {
+        const cleanStep = step.replace(/^[0-9০-৯]+[.)]\s*/, '');
+        return `
+            <div class="first-aid-step-card">
+                <span class="step-num-badge">${formatStepNumeral(idx + 1)}</span>
+                <span class="step-text">${escapeHtml(cleanStep)}</span>
+            </div>`;
+    }).join('');
+
+    outputDiv.innerHTML = `
+        ${severityHtml}
+        <div class="service-entry-item"> ${services.hospital.html}</div>
+        <div class="service-entry-item"> ${services.police_station.html}</div>
+        <div class="service-entry-item"> ${services.ambulance.html}</div>
+        <div class="first-aid-heading">${escapeHtml(dict.immediate_header)}</div>
+        <div class="first-aid-steps">${stepsHtml}</div>
+    `;
 }
 
 let countdownInterval;
+const COUNTDOWN_RING_CIRCUMFERENCE = 377;
+
 function startCountdown() {
+    clearInterval(countdownInterval);
     document.getElementById('main-screen').style.display = 'none';
     document.getElementById('countdown-screen').classList.remove('hidden');
     document.getElementById('countdown-screen').style.display = 'block';
+
     let timeLeft = 5;
     document.getElementById('timer-display').innerText = timeLeft;
+
+    const ring = document.getElementById('countdown-ring-progress');
+    if (ring) {
+        ring.style.transition = 'none';
+        ring.style.strokeDasharray = String(COUNTDOWN_RING_CIRCUMFERENCE);
+        ring.style.strokeDashoffset = '0';
+        ring.getBoundingClientRect(); // Force reset before animating
+        requestAnimationFrame(() => {
+            ring.style.transition = 'stroke-dashoffset 5s linear';
+            ring.style.strokeDashoffset = String(COUNTDOWN_RING_CIRCUMFERENCE);
+        });
+    }
+
     countdownInterval = setInterval(() => {
         timeLeft--;
         document.getElementById('timer-display').innerText = timeLeft;
@@ -489,6 +531,11 @@ function startCountdown() {
 
 function cancelEmergency() {
     clearInterval(countdownInterval);
+    const ring = document.getElementById('countdown-ring-progress');
+    if (ring) {
+        ring.style.transition = 'none';
+        ring.style.strokeDashoffset = '0';
+    }
     document.getElementById('countdown-screen').style.display = 'none';
     document.getElementById('main-screen').style.display = 'block';
 }
