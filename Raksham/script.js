@@ -14,6 +14,7 @@ window._localDatasetCache = null;
 window.currentProfileData = null;
 window.currentLang = localStorage.getItem('raksham_lang') || 'en';
 window.lastEmergencyType = null;
+window.lastMlSeverityText = null;
 window.capturedScenePhotoBase64 = null;
 
 // Wake Render backend immediately on page load
