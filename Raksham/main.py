@@ -302,11 +302,24 @@ def send_family_and_killswitch_sms(contacts, services, lat, lon, user_id, victim
         if lat is not None and lon is not None
         else "Location unavailable"
     )
-    live_link = f"https://raksham-pi.vercel.app/track.html?id={user_id}"
+    live_link = (
+        f"https://raksham-pi.vercel.app/track.html?id={user_id}&lat={lat:.6f}&lon={lon:.6f}"
+        if lat is not None and lon is not None
+        else f"https://raksham-pi.vercel.app/track.html?id={user_id}"
+    )
 
-    hosp_name = (services.get("hospital") or {}).get("name", "Nearest Hospital")
-    police_name = (services.get("police_station") or {}).get("name", "Local Police")
-    amb_name = (services.get("ambulance") or {}).get("name", "108 Emergency Ambulance")
+    hosp = services.get("hospital") or {}
+    pol = services.get("police_station") or {}
+    amb = services.get("ambulance") or {}
+
+    hosp_name = hosp.get("name", "Nearest Hospital")
+    hosp_phone = hosp.get("sms_mobile") or hosp.get("landline") or hosp.get("phone") or "112"
+
+    police_name = pol.get("name", "Local Police")
+    police_phone = pol.get("sms_mobile") or pol.get("landline") or pol.get("phone") or "100"
+
+    amb_name = amb.get("name", "108 Emergency Ambulance")
+    amb_phone = amb.get("sms_mobile") or amb.get("landline") or amb.get("phone") or "108"
 
     alert_text = (
         f"🚨 RAKSHAM CRITICAL ALERT 🚨\n\n"
@@ -314,15 +327,13 @@ def send_family_and_killswitch_sms(contacts, services, lat, lon, user_id, victim
         f"🩸 Blood Group: {victim.get('blood_group') or 'N/A'}\n"
         f"📍 Incident Pin: {maps_link}\n"
         f"📡 Live Tracking: {live_link}\n\n"
-        f"🏥 Nearest Hospital: {hosp_name}\n"
-        f"🚓 Nearest Police: {police_name}\n"
-        f"🚑 Nearest Ambulance: {amb_name}\n\n"
+        f"🏥 Nearest Hospital: {hosp_name} ({hosp_phone})\n"
+        f"🚓 Nearest Police: {police_name} ({police_phone})\n"
+        f"🚑 Nearest Ambulance: {amb_name} ({amb_phone})\n\n"
         f"⚠️ Immediate medical assistance is required!"
     )
     clean_contacts = [normalize_indian_phone(c) for c in contacts if c and len(c.strip()) >= 5]
     send_textbee_sms(clean_contacts, alert_text)
-
-    # Wait 2.5s so TextBee's Android SMS queue doesn't drop the second back-to-back SMS
     victim_phone = normalize_indian_phone(victim.get("phone") or "")
     if len(victim_phone) >= 10:
         time.sleep(2.5)
