@@ -550,7 +550,12 @@ async function sendTriage(emergencyType) {
     if (chatBox) chatBox.style.display = 'block';
 
     const outputDiv = document.getElementById('ai-suggestions');
-    outputDiv.innerHTML = "<span style='color:#333;'>Finding nearest hospital, police & ambulance...</span>";
+    window.lastMlSeverityText = null;
+    outputDiv.innerHTML = `
+        <span class="skeleton-bar skeleton-full"></span>
+        <span class="skeleton-bar skeleton-full"></span>
+        <span class="skeleton-bar skeleton-md"></span>
+    `;
 
     let lat = window.currentScanLat, lon = window.currentScanLon;
     if (lat == null || lon == null || window.currentScanAccuracy > 80) {
@@ -628,7 +633,11 @@ async function sendTriage(emergencyType) {
             clearTimeout(triageTimer);
             let triageData = await triageRes.json();
             if (triageData.suggestions) {
-                outputDiv.innerHTML = triageData.suggestions.join("<br><br>");
+                const severityLine = triageData.suggestions.find((s) => /ML SEVERITY/i.test(s));
+                if (severityLine) {
+                    window.lastMlSeverityText = severityLine.replace(/<[^>]*>/g, '').trim();
+                    renderInstantGuidance(services, emergencyType);
+                }
             }
         } catch (e) {
             clearTimeout(triageTimer);
