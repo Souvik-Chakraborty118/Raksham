@@ -3,7 +3,7 @@
     display: flex;
     justify-content: center;
     gap: 8px;
-    margin: 10px 0 16px;
+    margin: 6px 0 16px;
 }
 
 .lang-btn {
@@ -22,7 +22,7 @@
     background: #FF003C;
     border-color: #FF003C;
     color: #ffffff;
-    box-shadow: 0 3px 8px rgba(255, 0, 60, 0.3);
+    box-shadow: 0 3px 8px rgba(255, 0, 60, 0.28);
 }
 
 /* Authority Dispatch Box */
@@ -39,19 +39,20 @@
     font-weight: 700;
     width: 100%;
     cursor: pointer;
-    box-shadow: 0 4px 10px rgba(211, 47, 47, 0.35);
+    box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
 }
 
 .authority-status {
     margin-top: 8px;
     font-size: 13px;
     text-align: center;
+    color: #18181b;
 }
 
 /* Offline 2G Cellular SMS SOS Box */
 .offline-sos-box {
     background: #fffbeb;
-    border: 2px solid #f59e0b;
+    border: 1.5px solid #f59e0b;
     border-radius: 14px;
     padding: 14px;
     margin-bottom: 16px;
@@ -92,7 +93,7 @@
 .verify-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(17, 17, 17, 0.78);
     z-index: 99998;
     display: flex;
     align-items: center;
@@ -108,13 +109,14 @@
     border-radius: 16px;
     padding: 20px;
     text-align: center;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
 }
 
 .verify-modal-card h3 {
     margin: 0 0 8px;
-    color: #d32f2f;
+    color: #FF003C;
     font-size: 18px;
+    font-weight: 800;
 }
 
 .verify-modal-card p {
@@ -150,7 +152,7 @@
 }
 
 .btn-confirm-dispatch {
-    background: #d32f2f;
+    background: #FF003C;
     color: #ffffff;
     border: none;
     padding: 12px;
@@ -158,6 +160,12 @@
     font-weight: 700;
     font-size: 14px;
     cursor: pointer;
+}
+
+.btn-confirm-dispatch:disabled {
+    background: #a1a1aa;
+    cursor: not-allowed;
+    opacity: 0.75;
 }
 
 .btn-cancel-modal {
@@ -171,8 +179,242 @@
     cursor: pointer;
 }
 
-.btn-confirm-dispatch:disabled {
-    background: #a1a1aa;
-    cursor: not-allowed;
-    opacity: 0.7;
+/* Shimmer Skeleton Loading Bars */
+@keyframes shimmerSweep {
+    0% { background-position: -220% 0; }
+    100% { background-position: 220% 0; }
+}
+
+.skeleton-bar,
+.skeleton-chip {
+    display: inline-block;
+    vertical-align: middle;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #ececef 25%, #f7f7f9 50%, #ececef 75%);
+    background-size: 220% 100%;
+    animation: shimmerSweep 1.35s ease-in-out infinite;
+}
+
+.skeleton-bar {
+    height: 14px;
+}
+
+.skeleton-sm { width: 58px; }
+.skeleton-md { width: 135px; }
+.skeleton-lg { width: 175px; }
+.skeleton-full { width: 100%; height: 16px; margin-bottom: 10px; display: block; }
+
+.skeleton-chip {
+    height: 52px;
+    width: 100%;
+    border-radius: 999px;
+}
+
+/* Clean Rounded Contact Chips */
+.contact-section-heading {
+    margin-top: 20px !important;
+}
+
+.contact-chips-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.contact-chip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #fafafa;
+    border: 1.5px solid #e4e4e7;
+    border-radius: 999px;
+    text-decoration: none;
+    color: #111111;
+    transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.12s ease;
+}
+
+.contact-chip:hover {
+    border-color: #FF003C;
+    background: #fff5f7;
+}
+
+.contact-chip:active {
+    transform: scale(0.98);
+}
+
+.contact-chip-primary {
+    background: #fff5f7;
+    border-color: rgba(255, 0, 60, 0.35);
+}
+
+.contact-chip-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #FF003C;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.contact-chip-icon svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+
+.contact-chip-meta {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    line-height: 1.25;
+    min-width: 0;
+}
+
+.contact-chip-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.contact-chip-num {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111111;
+}
+
+.contact-chip-call-tag {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 800;
+    color: #FF003C;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 0, 60, 0.08);
+}
+
+/* SVG Circular Countdown Ring */
+.countdown-ring-wrap {
+    position: relative;
+    width: 152px;
+    height: 152px;
+    margin: 22px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.countdown-svg {
+    width: 152px;
+    height: 152px;
+    transform: rotate(-90deg);
+}
+
+.countdown-track {
+    fill: none;
+    stroke: #f1f1f4;
+    stroke-width: 7;
+}
+
+.countdown-progress {
+    fill: none;
+    stroke: #FF003C;
+    stroke-width: 7;
+    stroke-linecap: round;
+    stroke-dasharray: 377;
+    stroke-dashoffset: 0;
+}
+
+.countdown-ring-wrap .timer {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    font-size: 56px;
+    font-weight: 900;
+    color: #111111;
+    animation: none;
+}
+
+/* Numbered First-Aid Step Cards & Service Entries */
+.severity-pill {
+    display: inline-block;
+    background: rgba(255, 0, 60, 0.09);
+    color: #FF003C !important;
+    border: 1px solid rgba(255, 0, 60, 0.25);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+}
+
+.service-entry-item {
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f1f4;
+    color: #111111;
+}
+
+.service-entry-item:last-of-type {
+    border-bottom: none;
+}
+
+.first-aid-heading {
+    margin: 16px 0 10px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #FF003C !important;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.first-aid-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.first-aid-step-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #fafafa;
+    border: 1px solid #ececef;
+    border-radius: 12px;
+    text-align: left;
+}
+
+.step-num-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #FF003C;
+    color: #ffffff !important;
+    font-size: 13px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.step-text {
+    color: #111111 !important;
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.45;
 }
