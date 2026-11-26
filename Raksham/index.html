@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Raksham - Emergency Medical Tag</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="features.css?v=2">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=3">
+    <link rel="stylesheet" href="features.css?v=3">
 </head>
 <body>
     <div class="container">
@@ -22,19 +22,17 @@
         <div id="main-screen">
             <div class="data-box">
                 <h2 data-i18n="medical_profile">Medical Profile</h2>
-                <p><strong data-i18n="lbl_name">Name:</strong> <span id="profile-name">Loading...</span></p>
-                <p><strong data-i18n="lbl_blood">Blood Group:</strong> <span id="profile-blood">Loading...</span></p>
-                <p><strong data-i18n="lbl_allergies">Allergies:</strong> <span id="profile-allergies">Loading...</span></p>
-                <p><strong data-i18n="lbl_conditions">Conditions:</strong> <span id="profile-conditions">Loading...</span></p>
+                <p><strong data-i18n="lbl_name">Name:</strong> <span id="profile-name"><span class="skeleton-bar skeleton-md"></span></span></p>
+                <p><strong data-i18n="lbl_blood">Blood Group:</strong> <span id="profile-blood"><span class="skeleton-bar skeleton-sm"></span></span></p>
+                <p><strong data-i18n="lbl_allergies">Allergies:</strong> <span id="profile-allergies"><span class="skeleton-bar skeleton-lg"></span></span></p>
+                <p><strong data-i18n="lbl_conditions">Conditions:</strong> <span id="profile-conditions"><span class="skeleton-bar skeleton-lg"></span></span></p>
 
-                <h2 style="margin-top: 20px;" data-i18n="contact_info">Contact Info</h2>
-                <p><strong data-i18n="lbl_primary">Primary:</strong> <span id="profile-phone">Loading...</span></p>
-                <p><strong data-i18n="lbl_em1">Emergency 1:</strong> <span id="profile-em1"></span></p>
-                <p><strong data-i18n="lbl_em2">Emergency 2:</strong> <span id="profile-em2"></span></p>
-                <p><strong data-i18n="lbl_em3">Emergency 3:</strong> <span id="profile-em3"></span></p>
-                <p><strong data-i18n="lbl_em4">Emergency 4:</strong> <span id="profile-em4"></span></p>
-                <p><strong data-i18n="lbl_em5">Emergency 5:</strong> <span id="profile-em5"></span></p>
-                <p><strong data-i18n="lbl_em6">Emergency 6:</strong> <span id="profile-em6"></span></p>
+                <h2 class="contact-section-heading" data-i18n="contact_info">Contact Info</h2>
+                <!-- Clean Contact Chips (Unused em2-em6 slots are hidden automatically) -->
+                <div id="contact-chips-container" class="contact-chips-grid">
+                    <div class="skeleton-chip"></div>
+                    <div class="skeleton-chip"></div>
+                </div>
             </div>
 
             <div class="data-box" id="medical-history-box" style="display:none;">
@@ -47,7 +45,16 @@
 
         <div id="countdown-screen" class="hidden">
             <h2 class="heavy-title" data-i18n="countdown_title">ALERTING EMERGENCY CONTACTS IN:</h2>
-            <div class="timer" id="timer-display">5</div>
+
+            <!-- SVG CIRCULAR COUNTDOWN RING -->
+            <div class="countdown-ring-wrap">
+                <svg class="countdown-svg" viewBox="0 0 140 140" aria-hidden="true">
+                    <circle class="countdown-track" cx="70" cy="70" r="60"></circle>
+                    <circle id="countdown-ring-progress" class="countdown-progress" cx="70" cy="70" r="60"></circle>
+                </svg>
+                <div class="timer" id="timer-display">5</div>
+            </div>
+
             <p class="warning" data-i18n="prank_warning">WARNING: Prank alerts are traced by IP Address.</p>
             <button class="btn btn-dark" onclick="cancelEmergency()" data-i18n="btn_cancel">CANCEL ALARM</button>
         </div>
@@ -76,7 +83,7 @@
                 <div id="authority-dispatch-status" class="authority-status"></div>
             </div>
 
-            <div class="data-box red-text bold-text" id="ai-suggestions"></div>
+            <div class="data-box" id="ai-suggestions"></div>
             <p class="subtitle" data-i18n="guidance_sub">Emergency contacts alerted. Stay with the victim.</p>
 
             <!-- CHATBOT & VOICE UI -->
@@ -101,7 +108,7 @@
             <p data-i18n="verify_desc">Snap a live photo of the scene (anti-prank verification & visual triage for doctors), then confirm dispatch.</p>
 
             <label class="camera-capture-label" for="live-scene-camera" data-i18n="btn_snap_photo">
-                📸 Snap Live Scene Photo (Camera Only)
+                Snap Live Scene Photo (Camera Only)
             </label>
             <input id="live-scene-camera" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleScenePhotoCapture(event)">
             <img id="scene-photo-preview" class="scene-preview-img hidden" alt="Live Scene Preview">
@@ -117,6 +124,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=7"></script>
+    <script src="script.js?v=9"></script>
 </body>
 </html>
