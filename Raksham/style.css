@@ -1,639 +1,425 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
-
-* {
-    box-sizing: border-box;
-}
-
-body {
-    font-family: 'Poppins', sans-serif;
-    text-align: center;
-    padding: 20px 16px;
-    background-color: #FAFAFA;
-    color: #111111;
-    margin: 0;
+/* One-Tap Multilingual Bar */
+.lang-toggle-bar {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-    position: relative;
-    overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
-}
-
-/* Smooth Professional Ambient Background Animation */
-body::before {
-    content: "";
-    position: fixed;
-    inset: -30%;
-    z-index: -2;
-    pointer-events: none;
-    background:
-        radial-gradient(circle at 20% 25%, rgba(255, 0, 60, 0.09) 0%, transparent 42%),
-        radial-gradient(circle at 80% 75%, rgba(255, 0, 60, 0.07) 0%, transparent 45%),
-        radial-gradient(circle at 55% 45%, rgba(24, 24, 27, 0.03) 0%, transparent 48%);
-    animation: ambientMeshDrift 18s ease-in-out infinite alternate;
-    will-change: transform;
-}
-
-/* Subtle Architectural Dot Layer */
-body::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background-image: radial-gradient(rgba(255, 0, 60, 0.14) 0.75px, transparent 0.75px);
-    background-size: 24px 24px;
-    opacity: 0.45;
-}
-
-/* --- SUBTLE PROFESSIONAL ANIMATIONS --- */
-@keyframes ambientMeshDrift {
-    0% {
-        transform: translate3d(-2%, -2%, 0) scale(1);
-    }
-    50% {
-        transform: translate3d(2.5%, 1.5%, 0) scale(1.04);
-    }
-    100% {
-        transform: translate3d(-1.5%, 3%, 0) scale(1.02);
-    }
-}
-
-@keyframes subtleFadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes timerPulse {
-    0%, 100% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.06);
-    }
-}
-
-/* Main Container */
-.container {
-    width: 100%;
-    max-width: 420px;
-    flex: 1;
-    animation: subtleFadeIn 0.35s ease-out forwards;
-}
-
-/* Crisp, Steady App Heading (No Glow, No Flicker, No Float) */
-.app-header {
-    font-size: 2.2rem;
-    font-weight: 900;
-    letter-spacing: 2.5px;
-    text-transform: uppercase;
-    margin: 8px 0 18px;
-}
-
-.app-header span {
-    color: #FF003C;
-    text-shadow: none;
-    animation: none;
-}
-
-/* Clean Medical-Grade Cards */
-.data-box {
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(8px);
-    padding: 22px 20px;
-    border-radius: 16px;
-    margin-bottom: 20px;
-    box-shadow: 0 6px 24px rgba(17, 17, 17, 0.06);
-    border: 1px solid rgba(255, 0, 60, 0.14);
-    text-align: left;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.data-box:hover {
-    box-shadow: 0 10px 28px rgba(17, 17, 17, 0.09);
-    border-color: rgba(255, 0, 60, 0.28);
-}
-
-.data-box h2,
-.data-box h3 {
-    margin: 0 0 12px;
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: #FF003C;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    text-shadow: none;
-}
-
-.data-box p {
-    font-size: 0.98rem;
-    line-height: 1.55;
-    margin: 8px 0;
-    color: #3f3f46;
-}
-
-.data-box span {
-    font-weight: 600;
-    color: #111111;
-}
-
-/* Immediate Actions, Distance & Contact Numbers Card */
-#ai-suggestions {
-    color: #111111 !important;
-    font-weight: 500 !important;
-    font-size: 0.98rem;
-    line-height: 1.65;
-}
-
-#ai-suggestions strong {
-    font-weight: 700;
-}
-
-#ai-suggestions a[href^="tel:"] {
-    color: #111111 !important;
-    font-weight: 700;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-
-#ai-suggestions a[target="_blank"] {
-    color: #0056b3 !important;
-    font-weight: 600;
-}
-
-/* Global Buttons */
-.btn {
-    position: relative;
-    padding: 15px 22px;
-    font-size: 15px;
-    font-weight: 800;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    margin: 8px 0;
-    width: 100%;
-    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-}
-
-/* Primary Red Button */
-.btn-neon {
-    background-color: #FF003C;
-    color: #FFFFFF;
-    box-shadow: 0 4px 14px rgba(255, 0, 60, 0.28);
-    border: 2px solid #FF003C;
-}
-
-.btn-neon:hover {
-    background-color: #e00035;
-    box-shadow: 0 6px 18px rgba(255, 0, 60, 0.36);
-}
-
-.btn-neon:active {
-    transform: scale(0.98);
-}
-
-/* Secondary Outlined Button */
-.btn-dark {
-    background-color: #FFFFFF;
-    color: #FF003C;
-    border: 2px solid #FF003C;
-    box-shadow: 0 2px 8px rgba(17, 17, 17, 0.05);
-}
-
-.btn-dark:hover {
-    background-color: #FFF2F5;
-}
-
-.btn-dark:active {
-    transform: scale(0.98);
-}
-
-/* Utility Classes */
-.hidden {
-    display: none !important;
-}
-
-.heavy-title {
-    font-weight: 800;
-    font-size: 1.45rem;
-    color: #FF003C;
-    letter-spacing: 0.5px;
-    text-shadow: none;
-    margin: 8px 0 14px;
-}
-
-.red-text {
-    color: #FF003C;
-}
-
-.bold-text {
-    font-weight: 700;
-    font-size: 1.05rem;
-}
-
-.subtitle {
-    font-weight: 600;
-    font-size: 0.96rem;
-    color: #3f3f46;
-    line-height: 1.5;
-}
-
-/* Countdown Timer */
-.timer {
-    font-size: 84px;
-    font-weight: 900;
-    color: #FF003C;
-    margin: 20px 0;
-    line-height: 1;
-    animation: timerPulse 1s ease-in-out infinite;
-}
-
-.warning {
-    color: #FF003C;
-    font-size: 13px;
-    margin-top: 14px;
-    font-weight: 600;
-}
-
-.footer {
-    margin-top: auto;
-    padding: 24px 0 10px;
-    font-size: 12px;
-    color: #71717a;
-    font-weight: 600;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-}
-
-.footer span {
-    color: #FF003C;
-    font-weight: 800;
-}
-
-/* Profile Page & Form Inputs */
-.data-box input {
-    width: 100%;
-    padding: 12px 14px;
-    margin: 6px 0;
-    background-color: #F4F4F5;
-    color: #111111;
-    border: 1.5px solid #e4e4e7;
-    border-radius: 10px;
-    font-family: 'Poppins', sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.data-box input::placeholder {
-    color: #9ca3af;
-    font-weight: 400;
-}
-
-.data-box input:focus {
-    outline: none;
-    background-color: #FFFFFF;
-    border-color: #FF003C;
-    box-shadow: 0 0 0 3px rgba(255, 0, 60, 0.12);
-}
-
-.grid-layout {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-    text-align: left;
-}
-
-/* Top-Left Hamburger Menu Button */
-.menu-btn {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    font-size: 28px;
-    background: none;
-    border: none;
-    color: #FF003C;
-    cursor: pointer;
-    z-index: 1000;
-    transition: opacity 0.2s ease;
-}
-
-.menu-btn:hover {
-    opacity: 0.75;
-}
-
-/* Full-Screen Edit Profile Overlay */
-.edit-menu-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(250, 250, 250, 0.98);
-    backdrop-filter: blur(10px);
-    z-index: 2000;
-    padding: 20px;
-    overflow-y: auto;
-    text-align: center;
-    animation: subtleFadeIn 0.25s ease forwards;
-}
-
-.close-btn {
-    position: absolute;
-    top: 14px;
-    right: 22px;
-    font-size: 36px;
-    background: none;
-    border: none;
-    color: #FF003C;
-    cursor: pointer;
-    font-weight: 700;
-}
-
-hr {
-    border: 0;
-    border-top: 1px solid rgba(255, 0, 60, 0.15);
-    margin: 16px 0;
-}
-
-/* Clean, Steady Brand Logo (No Glow, No Float) */
-.raksham-logo {
-    width: 110px;
-    height: auto;
-    display: block;
-    margin: 0 auto 14px;
-    border-radius: 14px;
-    box-shadow: 0 4px 14px rgba(17, 17, 17, 0.08);
-    animation: none !important;
-    filter: none !important;
-}
-
-/* --- CHAT WIDGET (Raksham AI) --- */
-#chat-box {
-    text-align: left;
-}
-
-#chat-box h3 {
-    text-align: center;
-}
-
-.chat-output {
-    max-height: 220px;
-    overflow-y: auto;
-    margin-bottom: 12px;
-    font-size: 14px;
-    padding-right: 4px;
-}
-
-.chat-output .user-msg,
-.chat-output .ai-msg {
-    padding: 10px 14px;
-    border-radius: 12px;
-    margin: 8px 0;
-    line-height: 1.45;
-    animation: subtleFadeIn 0.2s ease forwards;
-}
-
-.chat-output .user-msg {
-    background-color: #F4F4F5;
-    color: #111111;
-}
-
-.chat-output .ai-msg {
-    background-color: rgba(255, 0, 60, 0.06);
-    border: 1px solid rgba(255, 0, 60, 0.14);
-    color: #18181b;
-}
-
-.chat-output .ai-msg b,
-.chat-output .user-msg b {
-    color: #FF003C;
-}
-
-.chat-input-row {
-    display: flex;
+    justify-content: center;
     gap: 8px;
+    margin: 10px 0 16px;
 }
 
-.chat-input-row input[type="text"] {
-    flex: 1;
-    margin: 0;
-}
-
-.chat-input-row .btn {
-    width: auto;
-    padding: 10px 18px;
-    margin: 0;
-}
-
-/* --- MEDICAL HISTORY SUMMARY BOX --- */
-#medical-history-box p {
-    white-space: pre-line;
-    font-size: 0.96rem;
-    color: #18181b;
-}
-
-/* --- MEDICAL REPORT UPLOAD --- */
-.report-upload-note {
-    font-size: 13px;
-    color: #52525b;
-    margin-bottom: 12px;
-}
-
-.file-input-wrapper {
-    position: relative;
-    margin-bottom: 12px;
-}
-
-.file-input-wrapper input[type="file"] {
-    width: 100%;
-    padding: 12px;
-    background-color: #F4F4F5;
-    border: 1.5px dashed rgba(255, 0, 60, 0.35);
-    border-radius: 10px;
-    font-family: 'Poppins', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    color: #52525b;
-    cursor: pointer;
-}
-
-.file-input-wrapper input[type="file"]:hover {
-    border-color: #FF003C;
-    background-color: #FFF2F5;
-}
-
-.report-summary-preview {
-    margin-top: 14px;
-    padding: 14px;
-    background-color: rgba(255, 0, 60, 0.04);
-    border-radius: 10px;
-    font-size: 13.5px;
-    white-space: pre-line;
-    color: #18181b;
-    text-align: left;
-}
-
-/* --- PRIVACY TOGGLE ROW --- */
-.toggle-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 16px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #3f3f46;
-    text-align: left;
-}
-
-.toggle-row input[type="checkbox"] {
-    appearance: none;
-    -webkit-appearance: none;
-    width: 42px;
-    height: 24px;
-    background-color: #d4d4d8;
-    border-radius: 20px;
-    position: relative;
-    cursor: pointer;
-    transition: background-color 0.25s ease;
-    flex-shrink: 0;
-}
-
-.toggle-row input[type="checkbox"]::before {
-    content: '';
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background-color: #ffffff;
-    top: 3px;
-    left: 3px;
-    transition: transform 0.25s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
-.toggle-row input[type="checkbox"]:checked {
-    background-color: #FF003C;
-}
-
-.toggle-row input[type="checkbox"]:checked::before {
-    transform: translateX(18px);
-}
-
-/* === LIVE EMERGENCY TRACKING PAGE (track.html) === */
-.track-hidden {
-    display: none !important;
-}
-
-.track-wrap {
-    max-width: 480px;
-    margin: 0 auto;
-    padding: 18px 14px 30px;
-    text-align: center;
-}
-
-.track-logo {
-    width: 84px;
-    height: 84px;
-    object-fit: contain;
-    border-radius: 16px;
+.lang-btn {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1.5px solid #e4e4e7;
     background: #ffffff;
-    padding: 6px;
-    box-shadow: 0 4px 16px rgba(17, 17, 17, 0.08);
-    margin-bottom: 10px;
-}
-
-.track-title {
-    color: #FF003C;
-    font-weight: 900;
-    font-size: 24px;
-    line-height: 1.25;
-    margin: 6px 0 16px;
-    text-transform: uppercase;
-}
-
-.track-status-card {
-    background: #ffffff;
-    border-radius: 16px;
-    padding: 16px 18px;
-    box-shadow: 0 6px 20px rgba(17, 17, 17, 0.06);
-    border: 1px solid rgba(255, 0, 60, 0.14);
-    margin-bottom: 14px;
+    color: #18181b;
     font-weight: 700;
-    font-size: 15px;
-    color: #18181b;
-}
-
-.track-status-sub {
-    display: block;
-    margin-top: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    color: #52525b;
-}
-
-.track-map-box {
-    background: #ffffff;
-    border-radius: 16px;
-    padding: 10px;
-    box-shadow: 0 6px 20px rgba(17, 17, 17, 0.06);
-    border: 1px solid rgba(255, 0, 60, 0.14);
-    margin-bottom: 14px;
-}
-
-#live-map {
-    width: 100%;
-    height: 330px;
-    border-radius: 12px;
-    z-index: 1;
-}
-
-#live-map,
-#live-map div {
-    animation: none !important;
-}
-
-.track-coords {
-    margin-top: 10px;
     font-size: 13px;
-    font-weight: 600;
-    color: #18181b;
+    cursor: pointer;
+    transition: all 0.15s ease;
 }
 
-.track-actions {
-    display: grid;
-    gap: 10px;
-    margin-top: 12px;
-}
-
-.track-btn-maps {
-    display: block;
+.lang-btn.active {
     background: #FF003C;
+    border-color: #FF003C;
     color: #ffffff;
-    text-decoration: none;
+    box-shadow: 0 3px 8px rgba(255, 0, 60, 0.3);
+}
+
+/* Authority Dispatch Box */
+.authority-dispatch-box {
+    margin-bottom: 16px;
+}
+
+.btn-authority {
+    background: #d32f2f;
+    color: #ffffff;
+    border: none;
     padding: 14px 16px;
     border-radius: 12px;
     font-weight: 700;
-    font-size: 15px;
-    box-shadow: 0 4px 12px rgba(255, 0, 60, 0.3);
+    width: 100%;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(211, 47, 47, 0.35);
 }
 
-.track-btn-112 {
+.authority-status {
+    margin-top: 8px;
+    font-size: 13px;
+    text-align: center;
+}
+
+/* Offline 2G Cellular SMS SOS Box */
+.offline-sos-box {
+    background: #fffbeb;
+    border: 2px solid #f59e0b;
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.offline-sos-title {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #92400e;
+}
+
+.btn-offline-sms {
+    display: block;
+    background: #d97706;
+    color: #ffffff;
+    text-decoration: none;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.btn-offline-112 {
     display: block;
     background: #18181b;
     color: #ffffff;
     text-decoration: none;
-    padding: 12px 16px;
-    border-radius: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+/* Bystander Live Camera Verification Modal */
+.verify-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 99998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+}
+
+.verify-modal-card {
+    background: #ffffff;
+    color: #18181b;
+    width: 100%;
+    max-width: 380px;
+    border-radius: 16px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+.verify-modal-card h3 {
+    margin: 0 0 8px;
+    color: #d32f2f;
+    font-size: 18px;
+}
+
+.verify-modal-card p {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: #52525b;
+}
+
+.camera-capture-label {
+    display: block;
+    background: #18181b;
+    color: #ffffff;
+    padding: 12px 14px;
+    border-radius: 10px;
     font-weight: 700;
     font-size: 14px;
+    cursor: pointer;
+    margin-bottom: 12px;
+}
+
+.scene-preview-img {
+    width: 100%;
+    max-height: 180px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    border: 2px solid #22c55e;
+}
+
+.verify-actions {
+    display: grid;
+    gap: 8px;
+}
+
+.btn-confirm-dispatch {
+    background: #d32f2f;
+    color: #ffffff;
+    border: none;
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.btn-confirm-dispatch:disabled {
+    background: #a1a1aa;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.btn-cancel-modal {
+    background: #e4e4e7;
+    color: #18181b;
+    border: none;
+    padding: 10px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+/* =====================================================
+   1. SHIMMER SKELETON LOADING BARS
+   ===================================================== */
+@keyframes shimmerSweep {
+    0% { background-position: -220% 0; }
+    100% { background-position: 220% 0; }
+}
+
+.skeleton-bar,
+.skeleton-chip {
+    display: inline-block;
+    vertical-align: middle;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #ececef 25%, #f7f7f9 50%, #ececef 75%);
+    background-size: 220% 100%;
+    animation: shimmerSweep 1.35s ease-in-out infinite;
+}
+
+.skeleton-bar {
+    height: 14px;
+}
+
+.skeleton-sm { width: 58px; }
+.skeleton-md { width: 135px; }
+.skeleton-lg { width: 175px; }
+.skeleton-full { width: 100%; height: 16px; margin-bottom: 10px; display: block; }
+
+.skeleton-chip {
+    height: 52px;
+    width: 100%;
+    border-radius: 12px;
+}
+
+/* =====================================================
+   2. CLEAN ROUNDED CONTACT CHIPS (Hides Unused Slots)
+   ===================================================== */
+.contact-section-heading {
+    margin-top: 20px !important;
+}
+
+.contact-chips-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.contact-chip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    background: #fafafa;
+    border: 1.5px solid #e4e4e7;
+    border-radius: 999px;
+    text-decoration: none;
+    color: #111111;
+    transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.12s ease;
+}
+
+.contact-chip:hover {
+    border-color: #FF003C;
+    background: #fff5f7;
+}
+
+.contact-chip:active {
+    transform: scale(0.98);
+}
+
+.contact-chip-primary {
+    background: #fff5f7;
+    border-color: rgba(255, 0, 60, 0.35);
+}
+
+.contact-chip-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #FF003C;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.contact-chip-icon svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+
+.contact-chip-meta {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    line-height: 1.25;
+    min-width: 0;
+}
+
+.contact-chip-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.contact-chip-num {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111111;
+}
+
+.contact-chip-call-tag {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 800;
+    color: #FF003C;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 0, 60, 0.08);
+}
+
+/* =====================================================
+   3. SVG CIRCULAR COUNTDOWN RING
+   ===================================================== */
+.countdown-ring-wrap {
+    position: relative;
+    width: 152px;
+    height: 152px;
+    margin: 22px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.countdown-svg {
+    width: 152px;
+    height: 152px;
+    transform: rotate(-90deg);
+}
+
+.countdown-track {
+    fill: none;
+    stroke: #f1f1f4;
+    stroke-width: 7;
+}
+
+.countdown-progress {
+    fill: none;
+    stroke: #FF003C;
+    stroke-width: 7;
+    stroke-linecap: round;
+    stroke-dasharray: 377;
+    stroke-dashoffset: 0;
+}
+
+.countdown-ring-wrap .timer {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    font-size: 56px;
+    font-weight: 900;
+    color: #111111;
+    animation: none;
+}
+
+/* =====================================================
+   4. NUMBERED FIRST-AID STEP CARDS
+   ===================================================== */
+.severity-pill {
+    display: inline-block;
+    background: rgba(255, 0, 60, 0.09);
+    color: #FF003C !important;
+    border: 1px solid rgba(255, 0, 60, 0.25);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+}
+
+.service-entry-item {
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f1f4;
+}
+
+.service-entry-item:last-of-type {
+    border-bottom: none;
+}
+
+.first-aid-heading {
+    margin: 16px 0 10px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #FF003C !important;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.first-aid-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.first-aid-step-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #fafafa;
+    border: 1px solid #ececef;
+    border-radius: 12px;
+    text-align: left;
+}
+
+.step-num-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #FF003C;
+    color: #ffffff !important;
+    font-size: 13px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.step-text {
+    color: #111111 !important;
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.45;
 }
