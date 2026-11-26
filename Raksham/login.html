@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <img src="raksham_logo.jpeg?v=1" alt="Raksham Logo" class="raksham-logo">
     <title>Raksham - Login</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
     <div class="container">
+        <img src="raksham_logo.jpeg?v=1" alt="Raksham Logo" class="raksham-logo">
         <div class="app-header"><span>RAKSHAM</span></div>
         <h2 class="heavy-title">Access Your Tag</h2>
-        
+
         <div class="data-box">
             <input type="email" id="login-email" placeholder="Registered Email Address" required>
             <input type="password" id="login-password" placeholder="Password" required>
-            
+
             <!-- SHOW PASSWORD TOGGLE -->
             <div style="margin-top: 8px; margin-bottom: 15px; text-align: left; display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" id="show-login-pass" onclick="togglePasswordVisibility('login-password')" style="width: 16px; height: 16px; cursor: pointer;">
@@ -24,14 +24,14 @@
             </div>
 
             <button class="btn btn-neon" onclick="attemptLogin()">LOGIN TO PROFILE</button>
-            
+
             <hr style="margin: 25px 0; border: 1px solid #f0f0f0;">
-            
+
             <p style="text-align: center; font-size: 14px; font-weight: 700; color: #888;">OR</p>
             <button class="btn btn-dark" onclick="window.location.href='register.html'">REGISTER NEW TAG</button>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=10"></script>
 </body>
 </html>
