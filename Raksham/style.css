@@ -1,500 +1,535 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    background-color: #FAFAFA;
+    min-height: 100%;
+}
 
 body {
     font-family: 'Poppins', sans-serif;
     text-align: center;
-    padding: 20px;
-    /* Animated Dot-Matrix Background */
-    background-color: #FAFAFA;
-    background-image: radial-gradient(#FF003C 0.5px, transparent 0.5px), radial-gradient(#FF003C 0.5px, #FAFAFA 0.5px);
-    background-size: 20px 20px;
-    background-position: 0 0, 10px 10px;
-    /* Softens the dots so they aren't distracting */
-    background-blend-mode: multiply;
-    opacity: 0.95; 
-    
+    padding: 20px 16px;
+    background: transparent;
     color: #111111;
     margin: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
 }
 
-/* --- ANIMATIONS --- */
-@keyframes slideUpFade {
-    0% { opacity: 0; transform: translateY(40px); }
-    100% { opacity: 1; transform: translateY(0); }
+/* Smooth Ambient Crimson Gradient Mesh (Background Layer 1) */
+body::before {
+    content: "";
+    position: fixed;
+    inset: -25%;
+    z-index: -2;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 18% 22%, rgba(255, 0, 60, 0.11) 0%, transparent 40%),
+        radial-gradient(circle at 84% 78%, rgba(255, 0, 60, 0.09) 0%, transparent 44%),
+        radial-gradient(circle at 52% 48%, rgba(17, 17, 17, 0.035) 0%, transparent 46%);
+    animation: ambientMeshFlow 16s ease-in-out infinite alternate;
+    will-change: transform;
 }
 
-@keyframes neonFlicker {
-    0%, 18%, 22%, 25%, 53%, 57%, 100% {
-        text-shadow: 0 2px 10px rgba(255, 0, 60, 0.4), 0 0 20px rgba(255, 0, 60, 0.2);
-        color: #FF003C;
+/* Subtle Drifting Medical Dot-Matrix Grid (Background Layer 2) */
+body::after {
+    content: "";
+    position: fixed;
+    inset: -48px;
+    z-index: -1;
+    pointer-events: none;
+    background-image: radial-gradient(rgba(255, 0, 60, 0.18) 0.85px, transparent 0.85px);
+    background-size: 24px 24px;
+    opacity: 0.45;
+    animation: subtleGridDrift 28s linear infinite;
+    will-change: transform;
+}
+
+/* --- CLEAN PROFESSIONAL ANIMATIONS --- */
+@keyframes ambientMeshFlow {
+    0% {
+        transform: translate3d(-2.5%, -2%, 0) scale(1);
     }
-    20%, 24%, 55% {
-        text-shadow: none;
-        color: #aa0028; /* Dimmed state */
+    50% {
+        transform: translate3d(2.5%, 1.5%, 0) scale(1.05);
+    }
+    100% {
+        transform: translate3d(-1.5%, 3%, 0) scale(1.02);
     }
 }
 
-@keyframes heartbeatPulse {
-    0% { transform: scale(1); text-shadow: 0 0 15px rgba(255, 0, 60, 0.5); }
-    14% { transform: scale(1.1); text-shadow: 0 0 30px rgba(255, 0, 60, 0.8); }
-    28% { transform: scale(1); text-shadow: 0 0 15px rgba(255, 0, 60, 0.5); }
-    42% { transform: scale(1.1); text-shadow: 0 0 30px rgba(255, 0, 60, 0.8); }
-    70%, 100% { transform: scale(1); text-shadow: 0 0 15px rgba(255, 0, 60, 0.5); }
+@keyframes subtleGridDrift {
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+    100% {
+        transform: translate3d(24px, 24px, 0);
+    }
 }
 
-@keyframes float {
-    0% { transform: translateY(0px); }
-    50% { transform: translateY(-5px); }
-    100% { transform: translateY(0px); }
+@keyframes subtleFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-/* Page Load Animation */
+/* Main Page Container */
 .container {
     width: 100%;
-    max-width: 400px;
+    max-width: 420px;
     flex: 1;
-    animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: subtleFadeIn 0.35s ease-out forwards;
 }
 
-/* Neon Red Glow & Flicker for App Name */
+/* Steady Brand Logo (No Glow, No Float) */
+.raksham-logo {
+    width: 108px;
+    height: auto;
+    display: block;
+    margin: 0 auto 12px;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 4px;
+    box-shadow: 0 4px 16px rgba(17, 17, 17, 0.08);
+}
+
+/* Crisp, Steady App Heading (No Glow, No Flicker, No Float) */
 .app-header {
-    font-size: 2.5rem;
+    font-size: 2.25rem;
     font-weight: 900;
-    letter-spacing: 3px;
+    letter-spacing: 2.5px;
     text-transform: uppercase;
-    margin-bottom: 25px;
-    margin-top: 10px;
+    margin: 6px 0 18px;
+    line-height: 1.1;
 }
 
 .app-header span {
     color: #FF003C;
-    animation: neonFlicker 4s infinite alternate; /* Applies the flicker */
+    text-shadow: none;
+    animation: none;
 }
 
-/* Clean White Containers with Floating Motion */
+/* Clean White Medical Cards */
 .data-box {
-    background: rgba(255, 255, 255, 0.95); 
-    backdrop-filter: blur(10px); /* Glassmorphism effect */
-    padding: 25px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(10px);
+    padding: 22px 20px;
     border-radius: 16px;
-    margin-bottom: 30px;
-    box-shadow: 0 15px 35px rgba(255, 0, 60, 0.08), 0 5px 15px rgba(0, 0, 0, 0.05);
-    border: 2px solid rgba(255, 0, 60, 0.15);
+    margin-bottom: 20px;
+    box-shadow: 0 6px 24px rgba(17, 17, 17, 0.06);
+    border: 1px solid rgba(255, 0, 60, 0.14);
     text-align: left;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .data-box:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 20px 40px rgba(255, 0, 60, 0.12), 0 8px 20px rgba(0, 0, 0, 0.08);
-    border: 2px solid rgba(255, 0, 60, 0.4);
+    box-shadow: 0 10px 28px rgba(17, 17, 17, 0.09);
+    border-color: rgba(255, 0, 60, 0.28);
 }
 
-.data-box h2, .data-box h3 {
-    margin-top: 0;
-    font-size: 1.4rem;
+.data-box h2,
+.data-box h3 {
+    margin: 0 0 12px;
+    font-size: 1.12rem;
+    font-weight: 800;
     color: #FF003C;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    text-shadow: 0 0 8px rgba(255, 0, 60, 0.2);
+    letter-spacing: 1px;
+    text-shadow: none;
 }
 
 .data-box p {
-    font-size: 1.1rem;
-    margin: 10px 0;
-    color: #444; 
+    font-size: 0.98rem;
+    line-height: 1.55;
+    margin: 8px 0;
+    color: #3f3f46;
 }
 
 .data-box span {
+    font-weight: 600;
+    color: #111111;
+}
+
+/* Immediate Actions Card: Black Text, Distance & Phone Numbers; Red Headings */
+#ai-suggestions {
+    color: #111111 !important;
+    font-weight: 500 !important;
+    font-size: 0.97rem;
+    line-height: 1.6;
+}
+
+#ai-suggestions strong {
+    color: #111111;
     font-weight: 700;
-    color: #000;
+}
+
+#ai-suggestions a[href^="tel:"] {
+    color: #111111 !important;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+#ai-suggestions a[target="_blank"] {
+    color: #0056b3 !important;
+    font-weight: 600;
 }
 
 /* Global Buttons */
 .btn {
     position: relative;
-    padding: 18px 30px;
-    font-size: 18px;
-    font-weight: 900;
+    padding: 15px 22px;
+    font-size: 15px;
+    font-weight: 800;
     border: none;
-    border-radius: 12px; 
+    border-radius: 12px;
     cursor: pointer;
-    margin: 10px 0;
+    margin: 8px 0;
     width: 100%;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: background-color 0.2s ease, transform 0.14s ease, box-shadow 0.2s ease;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
-    overflow: hidden; /* Needed for the light sweep */
-    z-index: 1;
+    letter-spacing: 0.8px;
 }
 
-/* Light Sweep Hover Effect on Buttons */
-.btn::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 50%;
-    height: 100%;
-    background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 100%);
-    transform: skewX(-25deg);
-    transition: all 0.6s ease;
-    z-index: -1;
-}
-
-.btn:hover::after {
-    left: 150%;
-}
-/* Red Neon Glowing Button */
 .btn-neon {
     background-color: #FF003C;
     color: #FFFFFF;
-    box-shadow: 0 8px 20px rgba(255, 0, 60, 0.3), inset 0 -3px 0 rgba(0,0,0,0.2);
+    box-shadow: 0 4px 14px rgba(255, 0, 60, 0.28);
     border: 2px solid #FF003C;
 }
+
 .btn-neon:hover {
-    background-color: #e60036;
-    box-shadow: 0 12px 25px rgba(255, 0, 60, 0.5), inset 0 -3px 0 rgba(0,0,0,0.2);
-    transform: translateY(-2px);
+    background-color: #e00035;
+    box-shadow: 0 6px 18px rgba(255, 0, 60, 0.36);
 }
+
 .btn-neon:active {
-    transform: scale(0.96) translateY(2px);
-    box-shadow: 0 2px 10px rgba(255, 0, 60, 0.4);
+    transform: scale(0.98);
 }
-/* Secondary Button (White/Red theme) */
+
 .btn-dark {
     background-color: #FFFFFF;
     color: #FF003C;
     border: 2px solid #FF003C;
-    box-shadow: 0 4px 10px rgba(255, 0, 60, 0.1);
+    box-shadow: 0 2px 8px rgba(17, 17, 17, 0.05);
 }
 
 .btn-dark:hover {
-    background-color: #FFF0F3; 
-    box-shadow: 0 8px 20px rgba(255, 0, 60, 0.25);
-    transform: translateY(-2px);
+    background-color: #FFF2F5;
 }
 
 .btn-dark:active {
-    transform: scale(0.96) translateY(2px);
+    transform: scale(0.98);
 }
-/* Utility Classes */
-.hidden { display: none !important; }
-.heavy-title { 
-    font-weight: 900; 
-    color: #FF003C;
-    text-shadow: 0 0 12px rgba(255, 0, 60, 0.3);
-}
-.red-text { color: #FF003C; }
-.bold-text { font-weight: 900; font-size: 1.2rem; }
-.subtitle { font-weight: 700; font-size: 1.1rem; color: #555; }
 
-/* The Countdown Timer - Heartbeat Animation */
-.timer {
-    font-size: 90px;
-    font-weight: 900;
+/* Utility Classes */
+.hidden {
+    display: none !important;
+}
+
+.heavy-title {
+    font-weight: 800;
+    font-size: 1.4rem;
     color: #FF003C;
-    margin: 20px 0;
+    letter-spacing: 0.5px;
+    text-shadow: none;
+    margin: 8px 0 14px;
+}
+
+.red-text {
+    color: #FF003C;
+}
+
+.bold-text {
+    font-weight: 700;
+    font-size: 1.02rem;
+}
+
+.subtitle {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #3f3f46;
+    line-height: 1.5;
+}
+
+.timer {
+    font-size: 72px;
+    font-weight: 900;
+    color: #111111;
+    margin: 16px 0;
     line-height: 1;
-    animation: heartbeatPulse 1.5s infinite; /* Adds the heartbeat effect */
 }
-.warning { 
-    color: #FF003C; 
-    font-size: 14px; 
-    margin-top: 15px; 
-    font-weight: 700; 
-    animation: float 3s ease-in-out infinite;
+
+.warning {
+    color: #FF003C;
+    font-size: 13px;
+    margin-top: 14px;
+    font-weight: 600;
 }
+
 .footer {
     margin-top: auto;
-    padding-top: 30px;
-    padding-bottom: 10px;
+    padding: 24px 0 10px;
     font-size: 12px;
-    color: #888888;
-    font-weight: 700;
-    letter-spacing: 1px;
+    color: #71717a;
+    font-weight: 600;
+    letter-spacing: 0.8px;
     text-transform: uppercase;
 }
+
 .footer span {
     color: #FF003C;
-    font-weight: 900;
+    font-weight: 800;
 }
-/* Profile Page & Form Inputs */
-.data-box input {
-    width: 90%;
-    padding: 14px;
-    margin: 8px 0;
-    background-color: #F4F4F4;
-    color: #111;
-    border: 2px solid transparent;
+
+/* Profile, Login & Register Form Inputs */
+.data-box input:not([type="checkbox"]):not([type="file"]) {
+    width: 100%;
+    padding: 12px 14px;
+    margin: 6px 0;
+    background-color: #F4F4F5;
+    color: #111111;
+    border: 1.5px solid #e4e4e7;
     border-radius: 10px;
     font-family: 'Poppins', sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    transition: all 0.3s ease;
+    font-size: 14px;
+    font-weight: 500;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
+
 .data-box input::placeholder {
-    color: #999;
+    color: #9ca3af;
     font-weight: 400;
 }
-.data-box input:focus {
+
+.data-box input:not([type="checkbox"]):not([type="file"]):focus {
     outline: none;
     background-color: #FFFFFF;
-    border: 2px solid #FF003C;
-    box-shadow: 0 0 15px rgba(255, 0, 60, 0.2);
-    transform: scale(1.02); /* Slight pop-out when typing */
+    border-color: #FF003C;
+    box-shadow: 0 0 0 3px rgba(255, 0, 60, 0.12);
 }
+
 .grid-layout {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: 12px;
     text-align: left;
 }
-/* Top-Left Hamburger Menu Button */
+
+/* Profile Page Hamburger Menu & Edit Overlay */
 .menu-btn {
     position: absolute;
-    top: 25px;
-    left: 25px;
-    font-size: 32px;
+    top: 20px;
+    left: 20px;
+    font-size: 28px;
     background: none;
     border: none;
     color: #FF003C;
     cursor: pointer;
     z-index: 1000;
-    transition: transform 0.3s ease;
+    transition: opacity 0.2s ease;
 }
+
 .menu-btn:hover {
-    transform: scale(1.15) rotate(5deg);
+    opacity: 0.75;
 }
-/* Full-Screen Edit Profile Overlay */
+
 .edit-menu-overlay {
     display: none;
     position: fixed;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(255, 255, 255, 0.95); 
-    backdrop-filter: blur(12px);
+    background-color: rgba(250, 250, 250, 0.98);
+    backdrop-filter: blur(10px);
     z-index: 2000;
     padding: 20px;
     overflow-y: auto;
-    box-sizing: border-box;
     text-align: center;
-    animation: slideUpFade 0.4s ease forwards; /* Menu slides up smoothly */
+    animation: subtleFadeIn 0.25s ease forwards;
 }
-/* Close (X) Button for Overlay */
+
 .close-btn {
     position: absolute;
-    top: 15px;
-    right: 25px;
-    font-size: 40px;
+    top: 14px;
+    right: 22px;
+    font-size: 36px;
     background: none;
     border: none;
     color: #FF003C;
     cursor: pointer;
-    font-weight: 900;
-    transition: transform 0.3s ease;
-}
-
-.close-btn:hover {
-    transform: rotate(90deg) scale(1.1);
+    font-weight: 700;
 }
 
 hr {
-    border: 1px solid rgba(255, 0, 60, 0.15);
-}
-/* Shining Logo Effect */
-.raksham-logo {
-    width: 130px;
-    height: auto;
-    display: block;
-    margin: 0 auto 15px auto; /* Centers the image and adds space below */
-    border-radius: 12px;
-    animation: logoShine 1.5s infinite alternate ease-in-out;
-}
-@keyframes logoShine {
-    0% { 
-        filter: drop-shadow(0px 0px 5px rgba(255, 0, 60, 0.4)) brightness(1); 
-        transform: scale(1);
-    }
-    100% { 
-        filter: drop-shadow(0px 0px 25px rgba(255, 0, 60, 1)) brightness(1.15); 
-        transform: scale(1.02);
-    }
-}
-/* --- UNIQUE UI ANIMATIONS --- */
-
-@keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(30px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes heartbeatPulse {
-    0% { box-shadow: 0 0 0 0 rgba(255, 0, 60, 0.7); }
-    70% { box-shadow: 0 0 0 15px rgba(255, 0, 60, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 0, 60, 0); }
-}
-
-@keyframes slowFloat {
-    0% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); }
-    100% { transform: translateY(0px); }
-}
-
-/* Apply fade-up to all major screens */
-.hidden { display: none !important; }
-div:not(.hidden) {
-    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Add the floating effect to your logo */
-.raksham-logo {
-    animation: logoShine 1.5s infinite alternate ease-in-out, slowFloat 4s infinite ease-in-out !important;
-}
-
-/* Add heartbeat pulse to all red primary buttons */
-button[style*="background:#FF003C"], .emergency-btn {
-    animation: heartbeatPulse 2s infinite;
-    transition: transform 0.2s ease, filter 0.2s ease;
+    border: 0;
+    border-top: 1px solid rgba(255, 0, 60, 0.15);
+    margin: 16px 0;
 }
 
 /* --- CHAT WIDGET (Raksham AI) --- */
 #chat-box {
     text-align: left;
 }
+
 #chat-box h3 {
     text-align: center;
 }
+
 .chat-output {
     max-height: 220px;
     overflow-y: auto;
     margin-bottom: 12px;
-    font-size: 15px;
+    font-size: 14px;
     padding-right: 4px;
 }
+
 .chat-output .user-msg,
 .chat-output .ai-msg {
     padding: 10px 14px;
     border-radius: 12px;
     margin: 8px 0;
-    line-height: 1.4;
-    animation: fadeInUp 0.3s ease forwards;
+    line-height: 1.45;
+    animation: subtleFadeIn 0.2s ease forwards;
 }
+
 .chat-output .user-msg {
-    background-color: #F4F4F4;
-    color: #111;
+    background-color: #F4F4F5;
+    color: #111111;
 }
+
 .chat-output .ai-msg {
-    background-color: rgba(255, 0, 60, 0.08);
-    border: 1px solid rgba(255, 0, 60, 0.15);
-    color: #333;
+    background-color: rgba(255, 0, 60, 0.06);
+    border: 1px solid rgba(255, 0, 60, 0.14);
+    color: #18181b;
 }
+
 .chat-output .ai-msg b,
 .chat-output .user-msg b {
     color: #FF003C;
 }
+
 .chat-input-row {
     display: flex;
     gap: 8px;
 }
+
 .chat-input-row input[type="text"] {
     flex: 1;
     margin: 0;
 }
+
 .chat-input-row .btn {
     width: auto;
-    padding: 14px 20px;
+    padding: 10px 18px;
     margin: 0;
 }
 
-/* --- MEDICAL HISTORY SUMMARY BOX (public scan view) --- */
+/* --- MEDICAL HISTORY & REPORT UPLOAD --- */
 #medical-history-box p {
     white-space: pre-line;
-    font-size: 1rem;
-    color: #333;
+    font-size: 0.96rem;
+    color: #18181b;
 }
 
-/* --- MEDICAL REPORT UPLOAD (profile edit menu) --- */
 .report-upload-note {
     font-size: 13px;
-    color: #666;
+    color: #52525b;
     margin-bottom: 12px;
 }
+
 .file-input-wrapper {
     position: relative;
     margin-bottom: 12px;
 }
+
 .file-input-wrapper input[type="file"] {
-    width: 90%;
+    width: 100%;
     padding: 12px;
-    background-color: #F4F4F4;
-    border: 2px dashed rgba(255, 0, 60, 0.3);
+    background-color: #F4F4F5;
+    border: 1.5px dashed rgba(255, 0, 60, 0.35);
     border-radius: 10px;
     font-family: 'Poppins', sans-serif;
     font-size: 13px;
-    font-weight: 700;
-    color: #666;
+    font-weight: 600;
+    color: #52525b;
     cursor: pointer;
-    transition: all 0.3s ease;
 }
+
 .file-input-wrapper input[type="file"]:hover {
     border-color: #FF003C;
-    background-color: #FFF0F3;
+    background-color: #FFF2F5;
 }
+
 .report-summary-preview {
-    margin-top: 15px;
-    padding: 15px;
-    background-color: rgba(255, 0, 60, 0.05);
+    margin-top: 14px;
+    padding: 14px;
+    background-color: rgba(255, 0, 60, 0.04);
     border-radius: 10px;
-    font-size: 14px;
+    font-size: 13.5px;
     white-space: pre-line;
-    color: #333;
+    color: #18181b;
     text-align: left;
 }
 
-/* --- PRIVACY TOGGLE ROW --- */
+/* --- PRIVACY TOGGLE SWITCH --- */
 .toggle-row {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-top: 18px;
+    margin-top: 16px;
     font-size: 14px;
-    font-weight: 700;
-    color: #444;
+    font-weight: 600;
+    color: #3f3f46;
     text-align: left;
 }
+
 .toggle-row input[type="checkbox"] {
     appearance: none;
     -webkit-appearance: none;
     width: 42px;
     height: 24px;
-    background-color: #ccc;
+    background-color: #d4d4d8;
     border-radius: 20px;
     position: relative;
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    transition: background-color 0.25s ease;
     flex-shrink: 0;
 }
+
 .toggle-row input[type="checkbox"]::before {
     content: '';
     position: absolute;
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background-color: #fff;
+    background-color: #ffffff;
     top: 3px;
     left: 3px;
-    transition: transform 0.3s ease;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    transition: transform 0.25s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
+
 .toggle-row input[type="checkbox"]:checked {
     background-color: #FF003C;
 }
+
 .toggle-row input[type="checkbox"]:checked::before {
     transform: translateX(18px);
 }
@@ -505,10 +540,12 @@ button[style*="background:#FF003C"], .emergency-btn {
 }
 
 .track-wrap {
+    width: 100%;
     max-width: 480px;
     margin: 0 auto;
     padding: 18px 14px 30px;
     text-align: center;
+    animation: subtleFadeIn 0.35s ease-out forwards;
 }
 
 .track-logo {
@@ -518,7 +555,7 @@ button[style*="background:#FF003C"], .emergency-btn {
     border-radius: 16px;
     background: #ffffff;
     padding: 6px;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 16px rgba(17, 17, 17, 0.08);
     margin-bottom: 10px;
 }
 
@@ -532,10 +569,11 @@ button[style*="background:#FF003C"], .emergency-btn {
 }
 
 .track-status-card {
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.95);
     border-radius: 16px;
     padding: 16px 18px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 6px 20px rgba(17, 17, 17, 0.06);
+    border: 1px solid rgba(255, 0, 60, 0.14);
     margin-bottom: 14px;
     font-weight: 700;
     font-size: 15px;
@@ -546,15 +584,16 @@ button[style*="background:#FF003C"], .emergency-btn {
     display: block;
     margin-top: 6px;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
     color: #52525b;
 }
 
 .track-map-box {
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.95);
     border-radius: 16px;
     padding: 10px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 6px 20px rgba(17, 17, 17, 0.06);
+    border: 1px solid rgba(255, 0, 60, 0.14);
     margin-bottom: 14px;
 }
 
@@ -574,7 +613,7 @@ button[style*="background:#FF003C"], .emergency-btn {
     margin-top: 10px;
     font-size: 13px;
     font-weight: 600;
-    color: #3f3f46;
+    color: #18181b;
 }
 
 .track-actions {
@@ -592,7 +631,7 @@ button[style*="background:#FF003C"], .emergency-btn {
     border-radius: 12px;
     font-weight: 700;
     font-size: 15px;
-    box-shadow: 0 4px 12px rgba(255, 0, 60, 0.35);
+    box-shadow: 0 4px 12px rgba(255, 0, 60, 0.3);
 }
 
 .track-btn-112 {
